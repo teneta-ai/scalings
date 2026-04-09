@@ -10,6 +10,7 @@
   "keywords": ["autoscaling", "kubernetes", "hpa", "simulator", "capacity-planning"],
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^25.5.2"
+    "@types/node": "^25.5.2",
+    "typescript": "^5.8.3"
   }
 }
