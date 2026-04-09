@@ -8,6 +8,7 @@
     "test": "tsc && node --test dist/tests/*.test.js"
   },
   "keywords": ["autoscaling", "kubernetes", "hpa", "simulator", "capacity-planning"],
+  "homepage": "https://scalings.xyz/",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.5.2",
