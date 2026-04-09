@@ -163,48 +163,42 @@
 
         <div class="param-row">
           <label for="param-min_replicas" title="Minimum number of pods/instances"><span class="pod-label">Pod</span> Min Replicas</label>
-          <input type="range" id="param-min_replicas" class="neon-slider" min="1" max="100" value="2" aria-label="Minimum replicas" title="Floor for scale-down">
-          <input type="number" id="param-min_replicas-num" min="1" max="100" value="2" aria-label="Minimum replicas value" title="Floor for scale-down">
+          <input type="number" id="param-min_replicas" min="1" max="100" value="2" aria-label="Minimum replicas value" title="Floor for scale-down">
           <span class="unit"></span>
           <button class="tooltip-btn" data-tooltip="Minimum number of pods/instances. The autoscaler will never scale below this number.">?</button>
         </div>
 
         <div class="param-row">
           <label for="param-max_replicas" title="Maximum number of pods/instances"><span class="pod-label">Pod</span> Max Replicas</label>
-          <input type="range" id="param-max_replicas" class="neon-slider" min="1" max="500" value="50" aria-label="Maximum replicas" title="Ceiling for scale-up">
-          <input type="number" id="param-max_replicas-num" min="1" max="500" value="50" aria-label="Maximum replicas value" title="Ceiling for scale-up">
+          <input type="number" id="param-max_replicas" min="1" max="500" value="50" aria-label="Maximum replicas value" title="Ceiling for scale-up">
           <span class="unit"></span>
           <button class="tooltip-btn" data-tooltip="Maximum number of pods/instances. The autoscaler will never scale above this number.">?</button>
         </div>
 
         <div class="param-row">
           <label for="param-scale_up_threshold" title="Utilization threshold to trigger scale-up">Scale-Up Threshold</label>
-          <input type="range" id="param-scale_up_threshold" class="neon-slider" min="1" max="100" value="70" aria-label="Scale-up threshold percent" title="Capacity utilization % that triggers scale-up">
-          <input type="number" id="param-scale_up_threshold-num" min="1" max="100" value="70" aria-label="Scale-up threshold value" title="Capacity utilization % that triggers scale-up">
+          <input type="number" id="param-scale_up_threshold" min="1" max="100" value="70" aria-label="Scale-up threshold value" title="Capacity utilization % that triggers scale-up">
           <span class="unit">%</span>
           <button class="tooltip-btn" data-tooltip="When capacity utilization exceeds this percentage, the autoscaler triggers a scale-up event.">?</button>
         </div>
 
         <div class="param-row">
           <label for="param-scale_down_threshold" title="Utilization threshold to trigger scale-down">Scale-Down Threshold</label>
-          <input type="range" id="param-scale_down_threshold" class="neon-slider" min="1" max="100" value="30" aria-label="Scale-down threshold percent" title="Capacity utilization % that triggers scale-down">
-          <input type="number" id="param-scale_down_threshold-num" min="1" max="100" value="30" aria-label="Scale-down threshold value" title="Capacity utilization % that triggers scale-down">
+          <input type="number" id="param-scale_down_threshold" min="1" max="100" value="30" aria-label="Scale-down threshold value" title="Capacity utilization % that triggers scale-down">
           <span class="unit">%</span>
           <button class="tooltip-btn" data-tooltip="When capacity utilization drops below this percentage, the autoscaler triggers a scale-down event.">?</button>
         </div>
 
         <div class="param-row">
           <label for="param-startup_time" title="Time for a new pod to become ready">Startup Time</label>
-          <input type="range" id="param-startup_time" class="neon-slider" min="0" max="600" value="30" aria-label="Pod startup time in seconds" title="Time (seconds) for a new pod to become ready">
-          <input type="number" id="param-startup_time-num" min="0" max="600" value="30" aria-label="Pod startup time value" title="Time (seconds) for a new pod to become ready">
+          <input type="number" id="param-startup_time" min="0" max="600" value="30" aria-label="Pod startup time value" title="Time (seconds) for a new pod to become ready">
           <span class="unit">s</span>
           <button class="tooltip-btn" data-tooltip="How long a new pod takes to start and become ready to serve traffic. During this time it consumes resources but doesn't serve requests.">?</button>
         </div>
 
         <div class="param-row">
           <label for="param-capacity_per_replica" title="Max requests/second per pod">Capacity per <span class="pod-label">Pod</span></label>
-          <input type="range" id="param-capacity_per_replica" class="neon-slider" min="1" max="10000" value="100" aria-label="Capacity per replica in RPS" title="How many requests/second a single pod can handle">
-          <input type="number" id="param-capacity_per_replica-num" min="1" max="10000" value="100" aria-label="Capacity per replica value" title="How many requests/second a single pod can handle">
+          <input type="number" id="param-capacity_per_replica" min="1" max="10000" value="100" aria-label="Capacity per replica value" title="How many requests/second a single pod can handle">
           <span class="unit">rps</span>
           <button class="tooltip-btn" data-tooltip="Maximum requests per second a single pod can handle regardless of the bottleneck resource (CPU, memory, etc).">?</button>
         </div>
@@ -222,80 +216,70 @@
 
           <div class="param-row">
             <label for="param-metric_observation_delay" title="Lag before autoscaler detects metric change">Metric Observation Delay</label>
-            <input type="range" id="param-metric_observation_delay" class="neon-slider" min="0" max="120" value="15" aria-label="Metric observation delay in seconds" title="Lag between real metric change and autoscaler detecting it">
-            <input type="number" id="param-metric_observation_delay-num" min="0" max="120" value="15" aria-label="Metric observation delay value" title="Lag between real metric change and autoscaler detecting it">
+            <input type="number" id="param-metric_observation_delay" min="0" max="120" value="15" aria-label="Metric observation delay value" title="Lag between real metric change and autoscaler detecting it">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="Lag (seconds) between a real metric change and the autoscaler detecting it. Simulates HPA scrape interval or CloudWatch delay.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-cooldown_scale_up" title="Cooldown after scale-up">Cooldown (Scale-Up)</label>
-            <input type="range" id="param-cooldown_scale_up" class="neon-slider" min="0" max="600" value="60" aria-label="Scale-up cooldown in seconds" title="Seconds after a scale-up before another is allowed">
-            <input type="number" id="param-cooldown_scale_up-num" min="0" max="600" value="60" aria-label="Scale-up cooldown value" title="Seconds after a scale-up before another is allowed">
+            <input type="number" id="param-cooldown_scale_up" min="0" max="600" value="60" aria-label="Scale-up cooldown value" title="Seconds after a scale-up before another is allowed">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="Seconds after a scale-up event before another scale-up is allowed. Prevents thrashing.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-cooldown_scale_down" title="Cooldown after scale-down">Cooldown (Scale-Down)</label>
-            <input type="range" id="param-cooldown_scale_down" class="neon-slider" min="0" max="600" value="300" aria-label="Scale-down cooldown in seconds" title="Seconds after a scale-down before another is allowed">
-            <input type="number" id="param-cooldown_scale_down-num" min="0" max="600" value="300" aria-label="Scale-down cooldown value" title="Seconds after a scale-down before another is allowed">
+            <input type="number" id="param-cooldown_scale_down" min="0" max="600" value="300" aria-label="Scale-down cooldown value" title="Seconds after a scale-down before another is allowed">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="Seconds after a scale-down event before another scale-down is allowed. Usually longer than scale-up cooldown.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-node_provisioning_time" title="Time to spin up a new worker node">Node Provisioning Time</label>
-            <input type="range" id="param-node_provisioning_time" class="neon-slider" min="0" max="600" value="120" aria-label="Node provisioning time in seconds" title="Time for cloud provider to spin up a new node. 0 if pre-provisioned.">
-            <input type="number" id="param-node_provisioning_time-num" min="0" max="600" value="120" aria-label="Node provisioning time value" title="Time for cloud provider to spin up a new node">
+            <input type="number" id="param-node_provisioning_time" min="0" max="600" value="120" aria-label="Node provisioning time value" title="Time for cloud provider to spin up a new node">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="Time (seconds) for the cloud provider to spin up a new worker node when cluster is at capacity. Set to 0 if nodes are pre-provisioned.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-cluster_node_capacity" title="Max pods per node">Cluster Node Capacity</label>
-            <input type="range" id="param-cluster_node_capacity" class="neon-slider" min="1" max="100" value="20" aria-label="Max pods per node" title="Max pods that fit on existing nodes before a new node is needed">
-            <input type="number" id="param-cluster_node_capacity-num" min="1" max="100" value="20" aria-label="Cluster node capacity value" title="Max pods that fit on existing nodes before a new node is needed">
+            <input type="number" id="param-cluster_node_capacity" min="1" max="100" value="20" aria-label="Cluster node capacity value" title="Max pods that fit on existing nodes before a new node is needed">
             <span class="unit"></span>
             <button class="tooltip-btn" data-tooltip="Max pods that can fit on existing nodes before a new node needs to be provisioned.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-pod_failure_rate" title="Random pod failure probability">Pod Failure Rate</label>
-            <input type="range" id="param-pod_failure_rate" class="neon-slider" min="0" max="1" step="0.001" value="0" aria-label="Pod failure rate probability" title="Probability (0-1) that a pod randomly dies each tick">
-            <input type="number" id="param-pod_failure_rate-num" min="0" max="1" step="0.001" value="0" aria-label="Pod failure rate value" title="Probability (0-1) that a pod randomly dies each tick">
+            <input type="number" id="param-pod_failure_rate" min="0" max="1" step="0.001" value="0" aria-label="Pod failure rate value" title="Probability (0-1) that a pod randomly dies each tick">
             <span class="unit"></span>
             <button class="tooltip-btn" data-tooltip="Probability (0-1) that a running pod randomly fails each simulation tick. Simulates crashes and OOM kills.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-graceful_shutdown_time" title="Time a terminating pod keeps serving">Graceful Shutdown Time</label>
-            <input type="range" id="param-graceful_shutdown_time" class="neon-slider" min="0" max="120" value="10" aria-label="Graceful shutdown time in seconds" title="Seconds a terminating pod continues serving during scale-down">
-            <input type="number" id="param-graceful_shutdown_time-num" min="0" max="120" value="10" aria-label="Graceful shutdown time value" title="Seconds a terminating pod continues serving during scale-down">
+            <input type="number" id="param-graceful_shutdown_time" min="0" max="120" value="10" aria-label="Graceful shutdown time value" title="Seconds a terminating pod continues serving during scale-down">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="Seconds a terminating pod continues serving traffic during scale-down before fully stopping.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-scale_up_step" title="Pods to add per scale-up event">Scale-Up Step Size</label>
-            <input type="range" id="param-scale_up_step" class="neon-slider" min="1" max="50" value="1" aria-label="Scale-up step size" title="Number of pods to add per scale-up event">
-            <input type="number" id="param-scale_up_step-num" min="1" max="50" value="1" aria-label="Scale-up step value" title="Number of pods to add per scale-up event">
+            <input type="number" id="param-scale_up_step" min="1" max="50" value="1" aria-label="Scale-up step value" title="Number of pods to add per scale-up event">
             <span class="unit"></span>
             <button class="tooltip-btn" data-tooltip="Number of pods to add per scale-up event. Higher values scale faster but may overshoot.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-scale_down_step" title="Pods to remove per scale-down event">Scale-Down Step Size</label>
-            <input type="range" id="param-scale_down_step" class="neon-slider" min="1" max="50" value="1" aria-label="Scale-down step size" title="Number of pods to remove per scale-down event">
-            <input type="number" id="param-scale_down_step-num" min="1" max="50" value="1" aria-label="Scale-down step value" title="Number of pods to remove per scale-down event">
+            <input type="number" id="param-scale_down_step" min="1" max="50" value="1" aria-label="Scale-down step value" title="Number of pods to remove per scale-down event">
             <span class="unit"></span>
             <button class="tooltip-btn" data-tooltip="Number of pods to remove per scale-down event. Higher values scale down faster.">?</button>
           </div>
 
           <div class="param-row">
             <label for="param-cost_per_replica_hour" title="Cost per pod per hour in USD">Cost per <span class="pod-label">Pod</span>/Hour</label>
-            <input type="range" id="param-cost_per_replica_hour" class="neon-slider" min="0" max="10" step="0.01" value="0.05" aria-label="Cost per replica per hour in USD" title="Cost per pod per hour for cost estimation">
-            <input type="number" id="param-cost_per_replica_hour-num" min="0" max="10" step="0.01" value="0.05" aria-label="Cost per replica hour value" title="Cost per pod per hour for cost estimation">
+            <input type="number" id="param-cost_per_replica_hour" min="0" max="10" step="0.01" value="0.05" aria-label="Cost per replica hour value" title="Cost per pod per hour for cost estimation">
             <span class="unit">$/h</span>
             <button class="tooltip-btn" data-tooltip="Cost per pod/instance per hour in USD. Used to estimate total simulation cost.">?</button>
           </div>
@@ -332,8 +316,7 @@
         <div id="steady-params" class="pattern-params">
           <div class="param-row">
             <label for="traffic-steady-rps" title="Constant requests per second">RPS</label>
-            <input type="range" id="traffic-steady-rps" class="neon-slider" min="1" max="10000" value="500" aria-label="Steady state RPS" title="Constant requests per second">
-            <input type="number" id="traffic-steady-rps-num" min="1" max="10000" value="500" aria-label="Steady RPS value" title="Constant requests per second">
+            <input type="number" id="traffic-steady-rps" min="1" max="10000" value="500" aria-label="Steady RPS value" title="Constant requests per second">
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="Constant request rate throughout the simulation.">?</button>
           </div>
@@ -343,22 +326,19 @@
         <div id="gradual-params" class="pattern-params">
           <div class="param-row">
             <label for="traffic-gradual-start_rps" title="Starting RPS">Start RPS</label>
-            <input type="range" id="traffic-gradual-start_rps" class="neon-slider" min="1" max="10000" value="50" aria-label="Gradual start RPS" title="Starting requests per second">
-            <input type="number" id="traffic-gradual-start_rps-num" min="1" max="10000" value="50" aria-label="Gradual start RPS value">
+            <input type="number" id="traffic-gradual-start_rps" min="1" max="10000" value="50" aria-label="Gradual start RPS value">
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="Traffic rate at the beginning of the ramp.">?</button>
           </div>
           <div class="param-row">
             <label for="traffic-gradual-end_rps" title="Ending RPS">End RPS</label>
-            <input type="range" id="traffic-gradual-end_rps" class="neon-slider" min="1" max="10000" value="800" aria-label="Gradual end RPS" title="Ending requests per second">
-            <input type="number" id="traffic-gradual-end_rps-num" min="1" max="10000" value="800" aria-label="Gradual end RPS value">
+            <input type="number" id="traffic-gradual-end_rps" min="1" max="10000" value="800" aria-label="Gradual end RPS value">
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="Traffic rate at the end of the ramp.">?</button>
           </div>
           <div class="param-row">
             <label for="traffic-gradual-duration" title="Ramp duration">Duration</label>
-            <input type="range" id="traffic-gradual-duration" class="neon-slider" min="1" max="3600" value="600" aria-label="Gradual ramp duration" title="Duration of the ramp in seconds">
-            <input type="number" id="traffic-gradual-duration-num" min="1" max="3600" value="600" aria-label="Gradual duration value">
+            <input type="number" id="traffic-gradual-duration" min="1" max="3600" value="600" aria-label="Gradual duration value">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="How long the ramp takes to go from start to end RPS.">?</button>
           </div>
@@ -368,29 +348,25 @@
         <div id="spike-params" class="pattern-params active">
           <div class="param-row">
             <label for="traffic-spike-base_rps" title="Baseline RPS">Base RPS</label>
-            <input type="range" id="traffic-spike-base_rps" class="neon-slider" min="1" max="10000" value="200" aria-label="Spike base RPS" title="Normal traffic rate before and after spike">
-            <input type="number" id="traffic-spike-base_rps-num" min="1" max="10000" value="200" aria-label="Spike base RPS value">
+            <input type="number" id="traffic-spike-base_rps" min="1" max="10000" value="200" aria-label="Spike base RPS value">
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="Normal traffic rate before and after the spike.">?</button>
           </div>
           <div class="param-row">
             <label for="traffic-spike-spike_rps" title="Peak RPS during spike">Spike RPS</label>
-            <input type="range" id="traffic-spike-spike_rps" class="neon-slider" min="1" max="10000" value="2000" aria-label="Spike peak RPS" title="Traffic rate during the spike">
-            <input type="number" id="traffic-spike-spike_rps-num" min="1" max="10000" value="2000" aria-label="Spike RPS value">
+            <input type="number" id="traffic-spike-spike_rps" min="1" max="10000" value="2000" aria-label="Spike RPS value">
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="Peak traffic rate during the spike.">?</button>
           </div>
           <div class="param-row">
             <label for="traffic-spike-spike_start" title="When spike begins">Spike Start</label>
-            <input type="range" id="traffic-spike-spike_start" class="neon-slider" min="0" max="3600" value="120" aria-label="Spike start time" title="Seconds into simulation when spike begins">
-            <input type="number" id="traffic-spike-spike_start-num" min="0" max="3600" value="120" aria-label="Spike start value">
+            <input type="number" id="traffic-spike-spike_start" min="0" max="3600" value="120" aria-label="Spike start value">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="Seconds into the simulation when the spike begins.">?</button>
           </div>
           <div class="param-row">
             <label for="traffic-spike-spike_duration" title="How long spike lasts">Spike Duration</label>
-            <input type="range" id="traffic-spike-spike_duration" class="neon-slider" min="1" max="3600" value="60" aria-label="Spike duration" title="How long the spike lasts in seconds">
-            <input type="number" id="traffic-spike-spike_duration-num" min="1" max="3600" value="60" aria-label="Spike duration value">
+            <input type="number" id="traffic-spike-spike_duration" min="1" max="3600" value="60" aria-label="Spike duration value">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="How long the traffic spike lasts.">?</button>
           </div>
@@ -400,22 +376,19 @@
         <div id="wave-params" class="pattern-params">
           <div class="param-row">
             <label for="traffic-wave-base_rps" title="Center RPS of the wave">Base RPS</label>
-            <input type="range" id="traffic-wave-base_rps" class="neon-slider" min="1" max="10000" value="300" aria-label="Wave base RPS" title="Center point of the oscillation">
-            <input type="number" id="traffic-wave-base_rps-num" min="1" max="10000" value="300" aria-label="Wave base RPS value">
+            <input type="number" id="traffic-wave-base_rps" min="1" max="10000" value="300" aria-label="Wave base RPS value">
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="Center point of the sinusoidal oscillation.">?</button>
           </div>
           <div class="param-row">
             <label for="traffic-wave-amplitude" title="Amplitude of oscillation">Amplitude</label>
-            <input type="range" id="traffic-wave-amplitude" class="neon-slider" min="1" max="5000" value="200" aria-label="Wave amplitude" title="How much traffic oscillates above and below base">
-            <input type="number" id="traffic-wave-amplitude-num" min="1" max="5000" value="200" aria-label="Wave amplitude value">
+            <input type="number" id="traffic-wave-amplitude" min="1" max="5000" value="200" aria-label="Wave amplitude value">
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="How much traffic swings above and below the base RPS.">?</button>
           </div>
           <div class="param-row">
             <label for="traffic-wave-period" title="Period of one full cycle">Period</label>
-            <input type="range" id="traffic-wave-period" class="neon-slider" min="1" max="3600" value="120" aria-label="Wave period" title="Seconds for one complete oscillation cycle">
-            <input type="number" id="traffic-wave-period-num" min="1" max="3600" value="120" aria-label="Wave period value">
+            <input type="number" id="traffic-wave-period" min="1" max="3600" value="120" aria-label="Wave period value">
             <span class="unit">s</span>
             <button class="tooltip-btn" data-tooltip="Seconds for one complete oscillation cycle.">?</button>
           </div>

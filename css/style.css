@@ -155,31 +155,26 @@ legend {
 .param-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  min-height: 36px;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  min-height: 32px;
 }
 
 .param-row label {
   min-width: 180px;
   max-width: 180px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
 
-.param-row .neon-slider {
-  flex: 1;
-  min-width: 100px;
-}
-
 .param-row input[type="number"] {
-  width: 85px;
+  width: 100px;
   flex-shrink: 0;
 }
 
 .param-row .unit {
-  min-width: 30px;
+  min-width: 28px;
   font-size: 0.8rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
