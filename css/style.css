@@ -765,6 +765,19 @@ button:active, .btn:active {
   text-shadow: 0 0 10px var(--red-dim);
 }
 
+.stat-card .stat-hint {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  margin-top: 0.3rem;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.stat-card .stat-hint:hover {
+  opacity: 1;
+  color: var(--purple);
+}
+
 /* --- Compare Results --- */
 .compare-grid {
   font-family: var(--font-mono);

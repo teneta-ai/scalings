@@ -184,11 +184,9 @@ export class LocalSimulationService {
         let peakPods = 0;
         let minPods = Infinity;
         let underProvisionedTicks = 0;
-        // Track spike recovery
-        let spikeDetected = false;
-        let spikeEndTime = null;
-        let recoveredTime = null;
-        let previousTraffic = 0;
+        // Track recovery: time from first drop to when system stabilizes
+        let firstDropTime = null;
+        let lastDropTime = null;
         for (const snap of snapshots) {
             totalRequests += snap.traffic_rps * tickInterval;
             totalServed += snap.served_requests * tickInterval;
@@ -197,20 +195,20 @@ export class LocalSimulationService {
             minPods = Math.min(minPods, snap.running_pods);
             if (snap.dropped_requests > 0) {
                 underProvisionedTicks++;
+                if (firstDropTime === null)
+                    firstDropTime = snap.time;
+                lastDropTime = snap.time;
             }
-            // Simple spike detection: traffic doubles from one tick to next
-            if (snap.traffic_rps > previousTraffic * 2 && previousTraffic > 0) {
-                spikeDetected = true;
+        }
+        // Find the first tick after all drops have ceased where capacity meets traffic
+        let recoveredTime = null;
+        if (lastDropTime !== null) {
+            for (const snap of snapshots) {
+                if (snap.time > lastDropTime && snap.dropped_requests === 0) {
+                    recoveredTime = snap.time;
+                    break;
+                }
             }
-            // After spike, when traffic returns to pre-spike levels
-            if (spikeDetected && snap.traffic_rps < previousTraffic * 0.6 && !spikeEndTime) {
-                spikeEndTime = snap.time;
-            }
-            // Recovery: after spike ended, capacity meets traffic again
-            if (spikeEndTime && !recoveredTime && snap.capacity_rps >= snap.traffic_rps && snap.dropped_requests === 0) {
-                recoveredTime = snap.time;
-            }
-            previousTraffic = snap.traffic_rps;
         }
         const totalDuration = snapshots.length * tickInterval;
         const underProvisionedSeconds = underProvisionedTicks * tickInterval;
@@ -223,7 +221,7 @@ export class LocalSimulationService {
             min_pod_count: minPods === Infinity ? 0 : minPods,
             time_under_provisioned_seconds: underProvisionedSeconds,
             time_under_provisioned_percent: totalDuration > 0 ? (underProvisionedSeconds / totalDuration) * 100 : 0,
-            time_to_recover_seconds: spikeEndTime && recoveredTime ? recoveredTime - spikeEndTime : null,
+            time_to_recover_seconds: firstDropTime !== null && recoveredTime !== null ? recoveredTime - firstDropTime : null,
             estimated_total_cost: snapshots.length > 0 ? snapshots[snapshots.length - 1].estimated_cost : 0,
         };
     }

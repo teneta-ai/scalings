@@ -143,6 +143,19 @@ class App {
                 document.getElementById('docs')?.scrollIntoView({ behavior: 'smooth' });
             });
         }
+        // Cost hint → open Advanced Parameters and scroll to cost field
+        const costHint = document.getElementById('cost-hint');
+        if (costHint) {
+            costHint.addEventListener('click', () => {
+                const advContent = document.getElementById('advanced-content');
+                const advToggle = document.getElementById('advanced-toggle');
+                if (advContent && advContent.classList.contains('collapsed')) {
+                    advToggle?.click();
+                }
+                document.getElementById('param-cost_per_replica_hour')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                document.getElementById('param-cost_per_replica_hour')?.focus();
+            });
+        }
         // Drag and drop for YAML import
         document.addEventListener('dragover', (e) => e.preventDefault());
         document.addEventListener('drop', (e) => {
@@ -240,9 +253,10 @@ class App {
         ${this.compareRow('Drop Rate', `${summaryA.drop_rate_percent.toFixed(2)}%`, `${summaryB.drop_rate_percent.toFixed(2)}%`, summaryB.drop_rate_percent - summaryA.drop_rate_percent, '%', true)}
         ${this.compareRow('Peak Pods', summaryA.peak_pod_count.toString(), summaryB.peak_pod_count.toString(), summaryB.peak_pod_count - summaryA.peak_pod_count)}
         ${this.compareRow('Dropped', this.formatNumber(summaryA.total_dropped), this.formatNumber(summaryB.total_dropped), summaryB.total_dropped - summaryA.total_dropped, '', true)}
-        ${this.compareRow('Cost', `$${summaryA.estimated_total_cost.toFixed(4)}`, `$${summaryB.estimated_total_cost.toFixed(4)}`, summaryB.estimated_total_cost - summaryA.estimated_total_cost, '$', true)}
+        ${this.compareRow('Cost*', `$${summaryA.estimated_total_cost.toFixed(4)}`, `$${summaryB.estimated_total_cost.toFixed(4)}`, summaryB.estimated_total_cost - summaryA.estimated_total_cost, '$', true)}
         ${this.compareRow('Under-prov', `${summaryA.time_under_provisioned_percent.toFixed(1)}%`, `${summaryB.time_under_provisioned_percent.toFixed(1)}%`, summaryB.time_under_provisioned_percent - summaryA.time_under_provisioned_percent, '%', true)}
       </div>
+      <div class="stat-hint" style="text-align:right;margin-top:0.4rem;">*Cost based on Advanced settings</div>
     `;
     }
     compareRow(label, a, b, diff, unit = '', lowerBetter = false) {

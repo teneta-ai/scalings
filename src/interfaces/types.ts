@@ -164,7 +164,7 @@ export interface SimulationSummary {
   min_pod_count: number;
   time_under_provisioned_seconds: number;
   time_under_provisioned_percent: number;
-  time_to_recover_seconds: number | null;  // null if no spike or never recovered
+  time_to_recover_seconds: number | null;  // null if no drops or never recovered
   estimated_total_cost: number;
 }
 
