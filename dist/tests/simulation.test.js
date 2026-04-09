@@ -230,26 +230,6 @@ describe('SimulationService — cost', () => {
     });
 });
 // ---------------------------------------------------------------------------
-// Response time model
-// ---------------------------------------------------------------------------
-describe('SimulationService — response time', () => {
-    it('response time increases with utilization', async () => {
-        const lowTraffic = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 10, capacity_per_replica: 100 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
-            traffic: { pattern: 'steady', params: { rps: 100 } },
-        });
-        const highTraffic = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 10, capacity_per_replica: 100 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
-            traffic: { pattern: 'steady', params: { rps: 900 } },
-        });
-        const lowResult = await svc.run(lowTraffic);
-        const highResult = await svc.run(highTraffic);
-        assert.ok(highResult.summary.avg_response_time_ms > lowResult.summary.avg_response_time_ms, `high traffic avg RT (${highResult.summary.avg_response_time_ms}) should be > low traffic (${lowResult.summary.avg_response_time_ms})`);
-    });
-});
-// ---------------------------------------------------------------------------
 // Summary calculations
 // ---------------------------------------------------------------------------
 describe('SimulationService — summary', () => {

@@ -168,7 +168,6 @@ export class LocalConfigService {
                 const p = params;
                 lines.push(`    start_rps: ${p.start_rps}`);
                 lines.push(`    end_rps: ${p.end_rps}`);
-                lines.push(`    duration: ${p.duration}`);
                 break;
             }
             case 'spike': {

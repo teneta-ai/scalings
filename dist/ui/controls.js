@@ -99,7 +99,6 @@ export class UIControls {
                 params = {
                     start_rps: this.getNumericValue('traffic-gradual-start_rps', 50),
                     end_rps: this.getNumericValue('traffic-gradual-end_rps', 800),
-                    duration: this.getNumericValue('traffic-gradual-duration', 600),
                 };
                 break;
             case 'spike':
@@ -140,7 +139,6 @@ export class UIControls {
                 const p = traffic.params;
                 this.setNumericValue('traffic-gradual-start_rps', p.start_rps);
                 this.setNumericValue('traffic-gradual-end_rps', p.end_rps);
-                this.setNumericValue('traffic-gradual-duration', p.duration);
                 break;
             }
             case 'spike': {

@@ -52,8 +52,9 @@ export class LocalSimulationService implements SimulationService {
 
       // --- Random pod failures ---
       if (advanced.pod_failure_rate > 0) {
+        const failureProbability = advanced.pod_failure_rate / 100;
         pods = pods.filter(pod => {
-          if (pod.state === 'running' && Math.random() < advanced.pod_failure_rate) {
+          if (pod.state === 'running' && Math.random() < failureProbability) {
             return false; // Pod dies
           }
           return true;
@@ -155,14 +156,6 @@ export class LocalSimulationService implements SimulationService {
       const billablePods = pods.length; // All pods incur cost
       cumulativeCost += billablePods * advanced.cost_per_replica_hour * tickHours;
 
-      // Response time estimation: increases as utilization approaches 1
-      // Using a simple M/M/1 queue model approximation
-      const baseResponseTime = 10; // 10ms base
-      const effectiveUtilization = Math.min(utilization, 0.99);
-      const responseTime = capacity > 0
-        ? baseResponseTime / (1 - effectiveUtilization)
-        : currentTraffic > 0 ? 99999 : baseResponseTime;
-
       snapshots.push({
         time,
         traffic_rps: currentTraffic,
@@ -177,7 +170,6 @@ export class LocalSimulationService implements SimulationService {
         delayed_utilization: Math.min(delayedUtilization, 2),
         estimated_cost: cumulativeCost,
         scale_event: scaleEvent,
-        response_time_ms: Math.min(responseTime, 99999),
       });
     }
 
@@ -193,8 +185,6 @@ export class LocalSimulationService implements SimulationService {
     let peakPods = 0;
     let minPods = Infinity;
     let underProvisionedTicks = 0;
-    let maxResponseTime = 0;
-    let totalResponseTime = 0;
 
     // Track spike recovery
     let spikeDetected = false;
@@ -212,9 +202,6 @@ export class LocalSimulationService implements SimulationService {
       if (snap.dropped_requests > 0) {
         underProvisionedTicks++;
       }
-
-      maxResponseTime = Math.max(maxResponseTime, snap.response_time_ms);
-      totalResponseTime += snap.response_time_ms;
 
       // Simple spike detection: traffic doubles from one tick to next
       if (snap.traffic_rps > previousTraffic * 2 && previousTraffic > 0) {
@@ -246,8 +233,6 @@ export class LocalSimulationService implements SimulationService {
       time_under_provisioned_percent: totalDuration > 0 ? (underProvisionedSeconds / totalDuration) * 100 : 0,
       time_to_recover_seconds: spikeEndTime && recoveredTime ? recoveredTime - spikeEndTime : null,
       estimated_total_cost: snapshots.length > 0 ? snapshots[snapshots.length - 1].estimated_cost : 0,
-      max_response_time_ms: maxResponseTime,
-      avg_response_time_ms: snapshots.length > 0 ? totalResponseTime / snapshots.length : 0,
     };
   }
 }

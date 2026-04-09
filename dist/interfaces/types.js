@@ -82,7 +82,7 @@ export const PRESET_SCENARIOS = [
             },
             traffic: {
                 pattern: 'gradual',
-                params: { start_rps: 50, end_rps: 800, duration: 600 },
+                params: { start_rps: 50, end_rps: 800 },
             },
         },
     },
@@ -104,7 +104,7 @@ export const PRESET_SCENARIOS = [
             },
             advanced: {
                 ...DEFAULT_ADVANCED,
-                pod_failure_rate: 0.005,
+                pod_failure_rate: 0.5,
             },
         },
     },

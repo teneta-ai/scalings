@@ -31,7 +31,7 @@ describe('TrafficPatternService — steady', () => {
 describe('TrafficPatternService — gradual', () => {
     const traffic = {
         pattern: 'gradual',
-        params: { start_rps: 100, end_rps: 1000, duration: 100 },
+        params: { start_rps: 100, end_rps: 1000 },
     };
     it('starts at start_rps', () => {
         const data = svc.generate(traffic, 100, 1);

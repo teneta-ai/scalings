@@ -45,7 +45,7 @@ describe('TrafficPatternService — steady', () => {
 describe('TrafficPatternService — gradual', () => {
   const traffic: TrafficConfig = {
     pattern: 'gradual',
-    params: { start_rps: 100, end_rps: 1000, duration: 100 } as GradualParams,
+    params: { start_rps: 100, end_rps: 1000 } as GradualParams,
   };
 
   it('starts at start_rps', () => {

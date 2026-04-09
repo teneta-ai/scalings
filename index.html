@@ -153,12 +153,6 @@
             <span class="unit">rps</span>
             <button class="tooltip-btn" data-tooltip="Traffic rate at the end of the ramp.">?</button>
           </div>
-          <div class="param-row">
-            <label for="traffic-gradual-duration" title="Ramp duration">Duration</label>
-            <input type="number" id="traffic-gradual-duration" min="1" max="3600" value="600" aria-label="Gradual duration value">
-            <span class="unit">s</span>
-            <button class="tooltip-btn" data-tooltip="How long the ramp takes to go from start to end RPS.">?</button>
-          </div>
         </div>
 
         <!-- Spike -->
@@ -300,9 +294,9 @@
 
           <div class="param-row">
             <label for="param-pod_failure_rate" title="Random pod failure probability">Pod Failure Rate</label>
-            <input type="number" id="param-pod_failure_rate" min="0" max="1" step="0.001" value="0" aria-label="Pod failure rate value" title="Probability (0-1) that a pod randomly dies each tick">
-            <span class="unit"></span>
-            <button class="tooltip-btn" data-tooltip="Probability (0-1) that a running pod randomly fails each simulation tick. Simulates crashes and OOM kills.">?</button>
+            <input type="number" id="param-pod_failure_rate" min="0" max="100" step="0.1" value="0" aria-label="Pod failure rate value" title="Percentage (0-100) chance a pod randomly dies each tick">
+            <span class="unit">%</span>
+            <button class="tooltip-btn" data-tooltip="Percentage chance (0-100%) that a running pod randomly fails each simulation tick. Simulates crashes and OOM kills.">?</button>
           </div>
 
           <div class="param-row">
@@ -379,14 +373,6 @@
             <div class="stat-label">Estimated Cost</div>
             <div class="stat-value" id="stat-cost">-</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">Max Response Time</div>
-            <div class="stat-value" id="stat-max-response">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Avg Response Time</div>
-            <div class="stat-value" id="stat-avg-response">-</div>
-          </div>
         </div>
 
         <div id="compare-results" class="hidden" style="margin-top:1.5rem;"></div>
@@ -457,7 +443,7 @@
           <li><code>cooldown_scale_up</code> / <code>cooldown_scale_down</code> — Stabilization windows</li>
           <li><code>node_provisioning_time</code> — Time to spin up a new node (default: 120s, 0=pre-provisioned)</li>
           <li><code>cluster_node_capacity</code> — Max pods per node before new node needed (default: 20)</li>
-          <li><code>pod_failure_rate</code> — Random failure probability per tick (default: 0)</li>
+          <li><code>pod_failure_rate</code> — Random failure percentage per tick, 0-100 (default: 0)</li>
           <li><code>graceful_shutdown_time</code> — Seconds a terminating pod keeps serving (default: 10s)</li>
           <li><code>scale_up_step</code> / <code>scale_down_step</code> — Pods added/removed per event (default: 1)</li>
           <li><code>cost_per_replica_hour</code> — USD per pod-hour for cost estimation (default: $0.05)</li>
@@ -466,7 +452,7 @@
         <h3>Traffic Patterns</h3>
         <ul>
           <li><strong>Steady</strong> — Constant RPS. Params: <code>rps</code></li>
-          <li><strong>Gradual Ramp</strong> — Linear increase. Params: <code>start_rps</code>, <code>end_rps</code>, <code>duration</code></li>
+          <li><strong>Gradual Ramp</strong> — Linear increase. Params: <code>start_rps</code>, <code>end_rps</code></li>
           <li><strong>Spike</strong> — Sudden jump. Params: <code>base_rps</code>, <code>spike_rps</code>, <code>spike_start</code>, <code>spike_duration</code></li>
           <li><strong>Wave</strong> — Sinusoidal. Params: <code>base_rps</code>, <code>amplitude</code>, <code>period</code></li>
           <li><strong>Step Function</strong> — Discrete steps. Params: <code>steps[{rps, duration}]</code></li>

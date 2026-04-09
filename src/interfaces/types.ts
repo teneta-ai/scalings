@@ -34,7 +34,7 @@ export interface AdvancedParams {
   cooldown_scale_down: number;        // seconds
   node_provisioning_time: number;     // seconds (0 = pre-provisioned)
   cluster_node_capacity: number;      // max pods before new node needed
-  pod_failure_rate: number;           // 0-1 probability per tick
+  pod_failure_rate: number;           // 0-100 percent probability per tick
   graceful_shutdown_time: number;     // seconds
   cost_per_replica_hour: number;      // USD
 }
@@ -48,7 +48,6 @@ export interface SteadyParams {
 export interface GradualParams {
   start_rps: number;
   end_rps: number;
-  duration: number;
 }
 
 export interface SpikeParams {
@@ -135,7 +134,6 @@ export interface TickSnapshot {
   delayed_utilization: number; // utilization the autoscaler sees (with delay)
   estimated_cost: number;      // cumulative cost in USD
   scale_event: 'up' | 'down' | null;
-  response_time_ms: number;    // estimated response time
 }
 
 export interface SimulationResult {
@@ -154,8 +152,6 @@ export interface SimulationSummary {
   time_under_provisioned_percent: number;
   time_to_recover_seconds: number | null;  // null if no spike or never recovered
   estimated_total_cost: number;
-  max_response_time_ms: number;
-  avg_response_time_ms: number;
 }
 
 // --- Service Interfaces ---
@@ -277,7 +273,7 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
       },
       traffic: {
         pattern: 'gradual',
-        params: { start_rps: 50, end_rps: 800, duration: 600 } as GradualParams,
+        params: { start_rps: 50, end_rps: 800 } as GradualParams,
       },
     },
   },
@@ -299,7 +295,7 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
       },
       advanced: {
         ...DEFAULT_ADVANCED,
-        pod_failure_rate: 0.005,
+        pod_failure_rate: 0.5,
       },
     },
   },

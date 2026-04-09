@@ -56,8 +56,7 @@ export class LocalTrafficPatternService implements TrafficPatternService {
   }
 
   private gradual(params: GradualParams, t: number, duration: number): number {
-    const effectiveDuration = params.duration || duration;
-    const progress = Math.min(t / effectiveDuration, 1);
+    const progress = Math.min(t / duration, 1);
     return params.start_rps + (params.end_rps - params.start_rps) * progress;
   }
 
@@ -111,10 +110,8 @@ export class LocalTrafficPatternService implements TrafficPatternService {
     switch (traffic.pattern) {
       case 'steady':
         return 60;
-      case 'gradual': {
-        const p = traffic.params as GradualParams;
-        return p.duration || 600;
-      }
+      case 'gradual':
+        return 600;
       case 'spike': {
         const p = traffic.params as SpikeParams;
         return p.spike_start + p.spike_duration + Math.max(60, p.spike_duration);

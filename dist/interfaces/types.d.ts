@@ -31,7 +31,6 @@ export interface SteadyParams {
 export interface GradualParams {
     start_rps: number;
     end_rps: number;
-    duration: number;
 }
 export interface SpikeParams {
     base_rps: number;
@@ -99,7 +98,6 @@ export interface TickSnapshot {
     delayed_utilization: number;
     estimated_cost: number;
     scale_event: 'up' | 'down' | null;
-    response_time_ms: number;
 }
 export interface SimulationResult {
     snapshots: TickSnapshot[];
@@ -116,8 +114,6 @@ export interface SimulationSummary {
     time_under_provisioned_percent: number;
     time_to_recover_seconds: number | null;
     estimated_total_cost: number;
-    max_response_time_ms: number;
-    avg_response_time_ms: number;
 }
 export interface SimulationService {
     run(config: SimulationConfig): Promise<SimulationResult>;

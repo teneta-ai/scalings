@@ -116,14 +116,27 @@ class App {
         // Docs toggle
         const docsToggle = document.getElementById('docs-toggle');
         const docsContent = document.getElementById('docs-content');
-        if (docsToggle && docsContent) {
-            docsToggle.addEventListener('click', () => {
-                docsContent.classList.toggle('collapsed');
-                docsToggle.classList.toggle('expanded');
-                const arrow = docsToggle.querySelector('.toggle-arrow');
-                if (arrow) {
-                    arrow.textContent = docsContent.classList.contains('collapsed') ? '\u25B6' : '\u25BC';
+        const expandDocs = () => {
+            if (!docsToggle || !docsContent)
+                return;
+            docsContent.classList.toggle('collapsed');
+            docsToggle.classList.toggle('expanded');
+            const arrow = docsToggle.querySelector('.toggle-arrow');
+            if (arrow) {
+                arrow.textContent = docsContent.classList.contains('collapsed') ? '\u25B6' : '\u25BC';
+            }
+        };
+        if (docsToggle)
+            docsToggle.addEventListener('click', expandDocs);
+        // Header "Docs" button should also expand the docs section
+        const headerDocsBtn = document.querySelector('.header-docs-btn');
+        if (headerDocsBtn) {
+            headerDocsBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (docsContent && docsContent.classList.contains('collapsed')) {
+                    expandDocs();
                 }
+                document.getElementById('docs')?.scrollIntoView({ behavior: 'smooth' });
             });
         }
         // Drag and drop for YAML import
@@ -196,8 +209,6 @@ class App {
         this.setSummaryValue('stat-underprov-time', `${summary.time_under_provisioned_seconds}s (${summary.time_under_provisioned_percent.toFixed(1)}%)`);
         this.setSummaryValue('stat-recovery-time', summary.time_to_recover_seconds !== null ? `${summary.time_to_recover_seconds}s` : 'N/A');
         this.setSummaryValue('stat-cost', `$${summary.estimated_total_cost.toFixed(4)}`);
-        this.setSummaryValue('stat-max-response', `${summary.max_response_time_ms.toFixed(0)}ms`);
-        this.setSummaryValue('stat-avg-response', `${summary.avg_response_time_ms.toFixed(0)}ms`);
         // Highlight drops
         const droppedEl = document.getElementById('stat-dropped');
         if (droppedEl) {
@@ -222,7 +233,6 @@ class App {
         ${this.compareRow('Dropped', this.formatNumber(summaryA.total_dropped), this.formatNumber(summaryB.total_dropped), summaryB.total_dropped - summaryA.total_dropped, '', true)}
         ${this.compareRow('Cost', `$${summaryA.estimated_total_cost.toFixed(4)}`, `$${summaryB.estimated_total_cost.toFixed(4)}`, summaryB.estimated_total_cost - summaryA.estimated_total_cost, '$', true)}
         ${this.compareRow('Under-prov', `${summaryA.time_under_provisioned_percent.toFixed(1)}%`, `${summaryB.time_under_provisioned_percent.toFixed(1)}%`, summaryB.time_under_provisioned_percent - summaryA.time_under_provisioned_percent, '%', true)}
-        ${this.compareRow('Avg Response', `${summaryA.avg_response_time_ms.toFixed(0)}ms`, `${summaryB.avg_response_time_ms.toFixed(0)}ms`, summaryB.avg_response_time_ms - summaryA.avg_response_time_ms, 'ms', true)}
       </div>
     `;
     }

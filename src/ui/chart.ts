@@ -16,7 +16,6 @@ interface ChartColors {
   pods: string;
   dropped: string;
   droppedFill: string;
-  responseTime: string;
 }
 
 const COLORS: ChartColors = {
@@ -28,7 +27,6 @@ const COLORS: ChartColors = {
   pods: 'rgba(179, 71, 217, 0.9)',
   dropped: 'rgba(239, 68, 68, 0.9)',
   droppedFill: 'rgba(239, 68, 68, 0.25)',
-  responseTime: 'rgba(251, 191, 36, 0.7)',
 };
 
 export class ChartRenderer {

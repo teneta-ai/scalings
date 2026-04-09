@@ -43,7 +43,7 @@ The config parameter is a base64-encoded JSON object matching the SimulationConf
 
 ## Traffic patterns available
 - steady: Constant RPS (params: rps)
-- gradual: Linear ramp (params: start_rps, end_rps, duration)
+- gradual: Linear ramp (params: start_rps, end_rps)
 - spike: Sudden jump (params: base_rps, spike_rps, spike_start, spike_duration)
 - wave: Sinusoidal oscillation (params: base_rps, amplitude, period)
 - step: Discrete steps (params: steps[{rps, duration}])

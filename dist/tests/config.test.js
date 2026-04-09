@@ -81,7 +81,7 @@ describe('ConfigService — YAML round-trip', () => {
                 cooldown_scale_down: 600,
                 node_provisioning_time: 60,
                 cluster_node_capacity: 50,
-                pod_failure_rate: 0.01,
+                pod_failure_rate: 1,
                 graceful_shutdown_time: 20,
                 cost_per_replica_hour: 0.10,
             },
