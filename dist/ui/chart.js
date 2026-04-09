@@ -20,9 +20,6 @@ export class ChartRenderer {
         this.playbackSpeed = 5;
         this.result = null;
         this.onAnimationTick = null;
-        // Compare mode
-        this.compareChart = null;
-        this.compareResult = null;
     }
     setPlaybackSpeed(speed) {
         this.playbackSpeed = speed;
@@ -372,125 +369,6 @@ export class ChartRenderer {
             },
         });
     }
-    renderCompare(canvasId, resultA, resultB) {
-        this.stop();
-        const canvas = document.getElementById(canvasId);
-        if (!canvas)
-            return;
-        if (this.compareChart) {
-            this.compareChart.destroy();
-            this.compareChart = null;
-        }
-        const ctx = canvas.getContext('2d');
-        if (!ctx)
-            return;
-        const maxLen = Math.max(resultA.snapshots.length, resultB.snapshots.length);
-        const labels = Array.from({ length: maxLen }, (_, i) => {
-            const snap = resultA.snapshots[i] || resultB.snapshots[i];
-            return snap ? this.formatTime(snap.time) : '';
-        });
-        this.compareChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [
-                    {
-                        label: 'Config A - Capacity',
-                        data: resultA.snapshots.map(s => s.capacity_rps),
-                        borderColor: COLORS.capacityGreen,
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.2,
-                        yAxisID: 'y',
-                    },
-                    {
-                        label: 'Config B - Capacity',
-                        data: resultB.snapshots.map(s => s.capacity_rps),
-                        borderColor: 'rgba(251, 191, 36, 0.9)',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.2,
-                        yAxisID: 'y',
-                        borderDash: [8, 4],
-                    },
-                    {
-                        label: 'Traffic',
-                        data: resultA.snapshots.map(s => s.traffic_rps),
-                        borderColor: COLORS.traffic,
-                        backgroundColor: COLORS.trafficFill,
-                        fill: true,
-                        borderWidth: 1,
-                        pointRadius: 0,
-                        tension: 0.2,
-                        yAxisID: 'y',
-                    },
-                    {
-                        label: 'Config A - Pods',
-                        data: resultA.snapshots.map(s => s.running_pods),
-                        borderColor: COLORS.pods,
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.2,
-                        yAxisID: 'y1',
-                    },
-                    {
-                        label: 'Config B - Pods',
-                        data: resultB.snapshots.map(s => s.running_pods),
-                        borderColor: 'rgba(251, 146, 60, 0.9)',
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.2,
-                        yAxisID: 'y1',
-                        borderDash: [8, 4],
-                    },
-                ],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 500 },
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        labels: {
-                            color: '#94a3b8',
-                            font: { family: "'JetBrains Mono', monospace", size: 11 },
-                            usePointStyle: true,
-                            pointStyle: 'line',
-                            padding: 16,
-                        },
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(10, 14, 26, 0.95)',
-                        titleColor: '#00d4ff',
-                        bodyColor: '#e2e8f0',
-                        borderColor: 'rgba(0, 212, 255, 0.3)',
-                        borderWidth: 1,
-                    },
-                },
-                scales: {
-                    x: {
-                        ticks: { color: '#64748b', maxTicksLimit: 20, maxRotation: 0 },
-                        grid: { color: 'rgba(100, 116, 139, 0.1)' },
-                    },
-                    y: {
-                        position: 'left',
-                        title: { display: true, text: 'RPS', color: '#64748b' },
-                        ticks: { color: '#64748b' },
-                        grid: { color: 'rgba(100, 116, 139, 0.1)' },
-                        beginAtZero: true,
-                    },
-                    y1: {
-                        position: 'right',
-                        title: { display: true, text: 'Pods', color: '#b347d9' },
-                        ticks: { color: '#b347d9' },
-                        grid: { drawOnChartArea: false },
-                        beginAtZero: true,
-                    },
-                },
-            },
-        });
-    }
     stop() {
         this.isPlaying = false;
         if (this.animationFrame) {
@@ -503,10 +381,6 @@ export class ChartRenderer {
         if (this.chart) {
             this.chart.destroy();
             this.chart = null;
-        }
-        if (this.compareChart) {
-            this.compareChart.destroy();
-            this.compareChart = null;
         }
     }
     formatTime(seconds) {

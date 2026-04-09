@@ -11,9 +11,6 @@ class App {
   private services: ServiceContainer;
   private controls: UIControls;
   private chart: ChartRenderer;
-  private lastResult: SimulationResult | null = null;
-  private compareResult: SimulationResult | null = null;
-  private isCompareMode: boolean = false;
   private isSimulating: boolean = false;
 
   constructor() {
@@ -82,15 +79,6 @@ class App {
     const copyExportBtn = document.getElementById('btn-copy-export');
     if (copyExportBtn) {
       copyExportBtn.addEventListener('click', () => this.copyExportOutput());
-    }
-
-    // Compare mode toggle
-    const compareToggle = document.getElementById('compare-mode') as HTMLInputElement;
-    if (compareToggle) {
-      compareToggle.addEventListener('change', () => {
-        this.isCompareMode = compareToggle.checked;
-        this.updateCompareUI();
-      });
     }
 
     // Playback speed
@@ -203,13 +191,7 @@ class App {
       const config = this.controls.getConfig();
       this.services.config.saveLocal(config);
 
-      if (this.isCompareMode && this.lastResult) {
-        // Store previous result for comparison
-        this.compareResult = this.lastResult;
-      }
-
       const result = await this.services.simulation.run(config);
-      this.lastResult = result;
 
       // Show results, hide placeholder
       const placeholder = document.getElementById('sim-placeholder');
@@ -221,13 +203,8 @@ class App {
       }
 
       // Render chart
-      if (this.isCompareMode && this.compareResult) {
-        this.chart.renderCompare('sim-chart', this.compareResult, result);
-        this.renderCompareSummary(this.compareResult.summary, result.summary);
-      } else {
-        const speed = parseFloat((document.getElementById('playback-speed') as HTMLInputElement)?.value || '5');
-        await this.chart.renderAnimated('sim-chart', result, speed);
-      }
+      const speed = parseFloat((document.getElementById('playback-speed') as HTMLInputElement)?.value || '5');
+      await this.chart.renderAnimated('sim-chart', result, speed);
 
       this.renderSummary(result.summary);
 
@@ -262,39 +239,6 @@ class App {
     const dropRateEl = document.getElementById('stat-drop-rate');
     if (dropRateEl) {
       dropRateEl.classList.toggle('danger', summary.drop_rate_percent > 1);
-    }
-  }
-
-  private renderCompareSummary(summaryA: SimulationSummary, summaryB: SimulationSummary): void {
-    const container = document.getElementById('compare-results');
-    if (!container) return;
-
-    container.classList.remove('hidden');
-    container.innerHTML = `
-      <h3 class="section-heading">Comparison Results</h3>
-      <div class="compare-grid">
-        <div class="compare-header"><span></span><span>Config A</span><span>Config B</span><span>Diff</span></div>
-        ${this.compareRow('Drop Rate', `${summaryA.drop_rate_percent.toFixed(2)}%`, `${summaryB.drop_rate_percent.toFixed(2)}%`, summaryB.drop_rate_percent - summaryA.drop_rate_percent, '%', true)}
-        ${this.compareRow('Peak Pods', summaryA.peak_pod_count.toString(), summaryB.peak_pod_count.toString(), summaryB.peak_pod_count - summaryA.peak_pod_count)}
-        ${this.compareRow('Dropped', this.formatNumber(summaryA.total_dropped), this.formatNumber(summaryB.total_dropped), summaryB.total_dropped - summaryA.total_dropped, '', true)}
-        ${this.compareRow('Cost*', `$${summaryA.estimated_total_cost.toFixed(4)}`, `$${summaryB.estimated_total_cost.toFixed(4)}`, summaryB.estimated_total_cost - summaryA.estimated_total_cost, '$', true)}
-        ${this.compareRow('Under-prov', `${summaryA.time_under_provisioned_percent.toFixed(1)}%`, `${summaryB.time_under_provisioned_percent.toFixed(1)}%`, summaryB.time_under_provisioned_percent - summaryA.time_under_provisioned_percent, '%', true)}
-      </div>
-      <div class="stat-hint" style="text-align:right;margin-top:0.4rem;">*Cost based on Advanced settings</div>
-    `;
-  }
-
-  private compareRow(label: string, a: string, b: string, diff: number, unit: string = '', lowerBetter: boolean = false): string {
-    const sign = diff > 0 ? '+' : '';
-    const cls = lowerBetter ? (diff < 0 ? 'better' : diff > 0 ? 'worse' : '') : (diff > 0 ? 'better' : diff < 0 ? 'worse' : '');
-    const formattedDiff = unit === '$' ? `${sign}$${Math.abs(diff).toFixed(4)}` : `${sign}${diff.toFixed(2)}${unit}`;
-    return `<div class="compare-row"><span class="compare-label">${label}</span><span>${a}</span><span>${b}</span><span class="${cls}">${formattedDiff}</span></div>`;
-  }
-
-  private updateCompareUI(): void {
-    const compareResults = document.getElementById('compare-results');
-    if (!this.isCompareMode && compareResults) {
-      compareResults.classList.add('hidden');
     }
   }
 

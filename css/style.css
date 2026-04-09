@@ -701,18 +701,6 @@ button:active, .btn:active {
   margin-top: 1rem;
 }
 
-.compare-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.compare-toggle input[type="checkbox"] {
-  accent-color: var(--purple);
-}
-
 /* --- Progress Bar --- */
 .progress-bar {
   width: 100%;
@@ -804,43 +792,6 @@ button:active, .btn:active {
 .stat-card .stat-hint:hover {
   opacity: 1;
   color: var(--purple);
-}
-
-/* --- Compare Results --- */
-.compare-grid {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-}
-
-.compare-header {
-  display: grid;
-  grid-template-columns: 120px 1fr 1fr 1fr;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-}
-
-.compare-row {
-  display: grid;
-  grid-template-columns: 120px 1fr 1fr 1fr;
-  gap: 0.5rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid rgba(100, 116, 139, 0.1);
-}
-
-.compare-label {
-  color: var(--text-secondary);
-}
-
-.compare-row .better {
-  color: var(--lime);
-}
-
-.compare-row .worse {
-  color: var(--red);
 }
 
 /* --- Export Section --- */
@@ -1159,11 +1110,6 @@ section {
     align-items: flex-start;
   }
 
-  .compare-header,
-  .compare-row {
-    grid-template-columns: 80px repeat(3, 1fr);
-    font-size: 0.75rem;
-  }
 }
 
 @media (max-width: 480px) {
