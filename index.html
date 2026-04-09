@@ -44,6 +44,93 @@
   </header>
 
   <main>
+    <!-- SIMULATION CONTROLS -->
+    <section id="sim-controls" class="card">
+      <h2 class="section-heading">Simulation Controls</h2>
+      <div class="sim-controls-row">
+        <div class="control-group">
+          <label for="sim-duration" title="Total simulation duration in seconds">Duration:</label>
+          <input type="number" id="sim-duration" min="10" max="86400" value="600" aria-label="Simulation duration in seconds" title="Total time to simulate">
+          <span class="unit" style="color:var(--text-muted);font-size:0.8rem">s</span>
+        </div>
+        <div class="control-group">
+          <label for="sim-tick" title="Granularity of the simulation">Tick Interval:</label>
+          <input type="number" id="sim-tick" min="1" max="60" value="1" aria-label="Tick interval in seconds" title="Simulation granularity in seconds">
+          <span class="unit" style="color:var(--text-muted);font-size:0.8rem">s</span>
+        </div>
+      </div>
+      <div class="playback-row">
+        <label for="playback-speed" title="Animation playback speed">Playback Speed:</label>
+        <input type="range" id="playback-speed" class="neon-slider" min="1" max="50" value="5" style="max-width:200px" aria-label="Playback speed multiplier" title="Controls animation speed of the output chart">
+        <span id="playback-speed-value" class="speed-value">5x</span>
+      </div>
+      <div class="sim-btn-row">
+        <button id="btn-simulate" class="btn btn-primary" aria-label="Run the autoscaling simulation" title="Run the simulation with current parameters">Simulate</button>
+        <label class="compare-toggle">
+          <input type="checkbox" id="compare-mode" aria-label="Enable compare mode" title="Compare this run against the previous one">
+          Compare with previous run
+        </label>
+      </div>
+      <div class="progress-bar"><div id="sim-progress" class="progress-fill"></div></div>
+    </section>
+
+    <!-- OUTPUT SECTION -->
+    <section id="output-section" class="hidden">
+      <div class="card">
+        <h2 class="section-heading">Simulation Results</h2>
+        <div class="crt-glow">
+          <div class="chart-container">
+            <canvas id="sim-chart"></canvas>
+          </div>
+        </div>
+
+        <div id="summary-panel" class="summary-panel">
+          <div class="stat-card">
+            <div class="stat-label">Total Requests</div>
+            <div class="stat-value" id="stat-total-requests">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Served</div>
+            <div class="stat-value" id="stat-served">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Dropped</div>
+            <div class="stat-value" id="stat-dropped">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Drop Rate</div>
+            <div class="stat-value" id="stat-drop-rate">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Peak Pods</div>
+            <div class="stat-value" id="stat-peak-pods">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Under-provisioned</div>
+            <div class="stat-value" id="stat-underprov-time">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Recovery Time</div>
+            <div class="stat-value" id="stat-recovery-time">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Estimated Cost</div>
+            <div class="stat-value" id="stat-cost">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Max Response Time</div>
+            <div class="stat-value" id="stat-max-response">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Avg Response Time</div>
+            <div class="stat-value" id="stat-avg-response">-</div>
+          </div>
+        </div>
+
+        <div id="compare-results" class="hidden" style="margin-top:1.5rem;"></div>
+      </div>
+    </section>
+
     <!-- CONFIG SECTION -->
     <section id="config-section" class="card">
       <h2 class="section-heading">Configuration</h2>
@@ -350,93 +437,6 @@
 
       <div class="traffic-preview">
         <canvas id="traffic-preview-canvas"></canvas>
-      </div>
-    </section>
-
-    <!-- SIMULATION CONTROLS -->
-    <section id="sim-controls" class="card">
-      <h2 class="section-heading">Simulation Controls</h2>
-      <div class="sim-controls-row">
-        <div class="control-group">
-          <label for="sim-duration" title="Total simulation duration in seconds">Duration:</label>
-          <input type="number" id="sim-duration" min="10" max="86400" value="600" aria-label="Simulation duration in seconds" title="Total time to simulate">
-          <span class="unit" style="color:var(--text-muted);font-size:0.8rem">s</span>
-        </div>
-        <div class="control-group">
-          <label for="sim-tick" title="Granularity of the simulation">Tick Interval:</label>
-          <input type="number" id="sim-tick" min="1" max="60" value="1" aria-label="Tick interval in seconds" title="Simulation granularity in seconds">
-          <span class="unit" style="color:var(--text-muted);font-size:0.8rem">s</span>
-        </div>
-      </div>
-      <div class="playback-row">
-        <label for="playback-speed" title="Animation playback speed">Playback Speed:</label>
-        <input type="range" id="playback-speed" class="neon-slider" min="1" max="50" value="5" style="max-width:200px" aria-label="Playback speed multiplier" title="Controls animation speed of the output chart">
-        <span id="playback-speed-value" class="speed-value">5x</span>
-      </div>
-      <div class="sim-btn-row">
-        <button id="btn-simulate" class="btn btn-primary" aria-label="Run the autoscaling simulation" title="Run the simulation with current parameters">Simulate</button>
-        <label class="compare-toggle">
-          <input type="checkbox" id="compare-mode" aria-label="Enable compare mode" title="Compare this run against the previous one">
-          Compare with previous run
-        </label>
-      </div>
-      <div class="progress-bar"><div id="sim-progress" class="progress-fill"></div></div>
-    </section>
-
-    <!-- OUTPUT SECTION -->
-    <section id="output-section" class="hidden">
-      <div class="card">
-        <h2 class="section-heading">Simulation Results</h2>
-        <div class="crt-glow">
-          <div class="chart-container">
-            <canvas id="sim-chart"></canvas>
-          </div>
-        </div>
-
-        <div id="summary-panel" class="summary-panel">
-          <div class="stat-card">
-            <div class="stat-label">Total Requests</div>
-            <div class="stat-value" id="stat-total-requests">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Served</div>
-            <div class="stat-value" id="stat-served">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Dropped</div>
-            <div class="stat-value" id="stat-dropped">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Drop Rate</div>
-            <div class="stat-value" id="stat-drop-rate">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Peak Pods</div>
-            <div class="stat-value" id="stat-peak-pods">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Under-provisioned</div>
-            <div class="stat-value" id="stat-underprov-time">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Recovery Time</div>
-            <div class="stat-value" id="stat-recovery-time">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Estimated Cost</div>
-            <div class="stat-value" id="stat-cost">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Max Response Time</div>
-            <div class="stat-value" id="stat-max-response">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Avg Response Time</div>
-            <div class="stat-value" id="stat-avg-response">-</div>
-          </div>
-        </div>
-
-        <div id="compare-results" class="hidden" style="margin-top:1.5rem;"></div>
       </div>
     </section>
 
