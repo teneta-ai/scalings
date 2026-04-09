@@ -315,6 +315,13 @@ export class UIControls {
                 }
             });
         });
+        const resetBtn = document.getElementById('btn-reset-defaults');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this.setConfig(DEFAULT_CONFIG);
+                this.notifyChange();
+            });
+        }
     }
     bindPlatformSelector() {
         const select = document.getElementById('platform-select');

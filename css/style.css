@@ -508,6 +508,17 @@ button:active, .btn:active {
   background: rgba(167, 139, 250, 0.08);
 }
 
+.preset-btn--reset {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
+.preset-btn--reset:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
 /* --- Simulation Name --- */
 .sim-name-row {
   display: flex;
