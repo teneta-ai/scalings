@@ -1,0 +1,37 @@
+import { SimulationConfig } from '../interfaces/types.js';
+import { TrafficPatternService } from '../interfaces/types.js';
+type ChangeCallback = () => void;
+export declare class UIControls {
+    private trafficService;
+    private previewRenderer;
+    private onChangeCallbacks;
+    private currentPattern;
+    constructor(trafficService: TrafficPatternService);
+    init(): void;
+    onChange(cb: ChangeCallback): void;
+    private notifyChange;
+    getConfig(): SimulationConfig;
+    setConfig(config: SimulationConfig): void;
+    private getTrafficConfig;
+    private setTrafficConfig;
+    private getStepEntries;
+    private setStepEntries;
+    private getCustomSeries;
+    private bindSliders;
+    private bindPatternSelector;
+    private bindAdvancedToggle;
+    private bindPresets;
+    private bindPlatformSelector;
+    private bindStepControls;
+    addStepRow(rps?: number, duration?: number): void;
+    private showPatternParams;
+    updatePreview(): void;
+    private updatePlatformLabels;
+    private getInputValue;
+    private getSelectValue;
+    private getNumericValue;
+    private setInputValue;
+    private setSelectValue;
+    private setNumericValue;
+}
+export {};

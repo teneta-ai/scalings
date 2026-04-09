@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://scalings.xyz/sitemap.xml
+
+# AI agent documentation
+# See /llms.txt for machine-readable site description
