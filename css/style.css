@@ -53,24 +53,6 @@ body {
   overflow-x: hidden;
 }
 
-/* --- Skip Link (Accessibility) --- */
-.skip-link {
-  position: absolute;
-  top: -100px;
-  left: 0;
-  background: var(--cyan);
-  color: var(--bg-primary);
-  padding: 0.5rem 1rem;
-  z-index: 10000;
-  font-weight: 600;
-  text-decoration: none;
-  border-radius: 0 0 var(--radius) 0;
-}
-
-.skip-link:focus {
-  top: 0;
-}
-
 /* --- Chart.js Load Error Banner --- */
 .chartjs-error {
   background: rgba(239, 68, 68, 0.15);
