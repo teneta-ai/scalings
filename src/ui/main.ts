@@ -175,8 +175,15 @@ class App {
         if (advContent && advContent.classList.contains('collapsed')) {
           advToggle?.click();
         }
-        document.getElementById('param-cost_per_replica_hour')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        document.getElementById('param-cost_per_replica_hour')?.focus();
+        const costInput = document.getElementById('param-cost_per_replica_hour');
+        if (costInput) {
+          costInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          costInput.focus();
+          costInput.classList.add('param-highlight');
+          costInput.addEventListener('animationend', () => {
+            costInput.classList.remove('param-highlight');
+          }, { once: true });
+        }
       });
     }
 

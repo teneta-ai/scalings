@@ -806,6 +806,35 @@ button:active, .btn:active {
   text-shadow: 0 0 10px var(--red-dim);
 }
 
+.cost-basis-btn {
+  font-size: 0.65rem;
+  color: var(--cyan);
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+
+.cost-basis-btn:hover {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--cyan);
+}
+
+@keyframes highlight-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.5); }
+  50% { box-shadow: 0 0 12px 3px rgba(0, 212, 255, 0.4); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0); }
+}
+
+.param-highlight {
+  animation: highlight-pulse 0.6s ease-out 2;
+  border-color: var(--cyan) !important;
+}
+
 .stat-card .stat-hint {
   font-size: 0.6rem;
   color: var(--text-muted);
