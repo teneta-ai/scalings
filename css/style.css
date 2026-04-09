@@ -139,6 +139,12 @@ header {
   margin-bottom: 0.75rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .header-docs-btn {
   text-decoration: none;
   font-size: 0.75rem;
@@ -148,6 +154,17 @@ header {
 
 .header-docs-btn:hover {
   color: var(--cyan);
+}
+
+.github-badge {
+  color: var(--text-muted);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.github-badge:hover {
+  color: var(--text-primary);
 }
 
 .logo {
