@@ -7,7 +7,6 @@ import {
   Platform,
   TrafficPatternType,
   TrafficConfig,
-  SteadyParams,
   GradualParams,
   SpikeParams,
   WaveParams,
@@ -132,11 +131,6 @@ export class UIControls {
     let params: TrafficConfig['params'];
 
     switch (pattern) {
-      case 'steady':
-        params = {
-          rps: this.getNumericValue('traffic-steady-rps', 500),
-        } as SteadyParams;
-        break;
       case 'gradual':
         params = {
           start_rps: this.getNumericValue('traffic-gradual-start_rps', 50),
@@ -182,11 +176,6 @@ export class UIControls {
     this.showPatternParams(traffic.pattern);
 
     switch (traffic.pattern) {
-      case 'steady': {
-        const p = traffic.params as SteadyParams;
-        this.setNumericValue('traffic-steady-rps', p.rps);
-        break;
-      }
       case 'gradual': {
         const p = traffic.params as GradualParams;
         this.setNumericValue('traffic-gradual-start_rps', p.start_rps);

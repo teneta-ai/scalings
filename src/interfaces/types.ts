@@ -304,24 +304,6 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
     },
   },
   {
-    name: 'Steady State',
-    description: 'Constant traffic to validate baseline scaling config',
-    config: {
-      name: 'Steady State',
-      scaling: {
-        ...DEFAULT_SCALING,
-        min_replicas: 5,
-        max_replicas: 15,
-        scale_up_threshold: 80,
-        capacity_per_replica: 100,
-      },
-      traffic: {
-        pattern: 'steady',
-        params: { rps: 500 } as SteadyParams,
-      },
-    },
-  },
-  {
     name: 'Step Migration',
     description: 'Traffic increases in discrete steps, simulating a phased rollout',
     config: {

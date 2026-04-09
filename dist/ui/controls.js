@@ -95,11 +95,6 @@ export class UIControls {
         const pattern = this.currentPattern;
         let params;
         switch (pattern) {
-            case 'steady':
-                params = {
-                    rps: this.getNumericValue('traffic-steady-rps', 500),
-                };
-                break;
             case 'gradual':
                 params = {
                     start_rps: this.getNumericValue('traffic-gradual-start_rps', 50),
@@ -141,11 +136,6 @@ export class UIControls {
             radio.checked = true;
         this.showPatternParams(traffic.pattern);
         switch (traffic.pattern) {
-            case 'steady': {
-                const p = traffic.params;
-                this.setNumericValue('traffic-steady-rps', p.rps);
-                break;
-            }
             case 'gradual': {
                 const p = traffic.params;
                 this.setNumericValue('traffic-gradual-start_rps', p.start_rps);
