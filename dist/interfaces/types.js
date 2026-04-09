@@ -15,7 +15,7 @@ export const DEFAULT_SCALING = {
 export const DEFAULT_ADVANCED = {
     metric_observation_delay: 15,
     cooldown_scale_up: 15,
-    cooldown_scale_down: 300,
+    cooldown_scale_down: 60,
     node_provisioning_time: 120,
     cluster_node_capacity: 20,
     pods_per_node: 10,
