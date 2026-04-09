@@ -264,15 +264,17 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
       name: 'Black Friday Spike',
       scaling: {
         ...DEFAULT_SCALING,
-        min_replicas: 3,
+        min_replicas: 10,
         max_replicas: 100,
-        scale_up_threshold: 60,
-        scale_up_step: 3,
+        scale_up_threshold: 50,
+        scale_up_step: 10,
         startup_time: 30,
+        capacity_per_replica: 40,
       },
       advanced: {
         ...DEFAULT_ADVANCED,
-        cooldown_scale_up: 30,
+        cooldown_scale_up: 15,
+        metric_observation_delay: 5,
       },
       traffic: {
         pattern: 'spike',
