@@ -42,6 +42,9 @@ export class ChartRenderer {
   private result: SimulationResult | null = null;
   private onAnimationTick: ((index: number, total: number) => void) | null = null;
 
+  /** Maps dataset labels to their index in the current chart for safe lookup. */
+  private datasetIndex: Map<string, number> = new Map();
+
   constructor() {}
 
   setPlaybackSpeed(speed: number): void {
@@ -51,6 +54,198 @@ export class ChartRenderer {
   setAnimationCallback(cb: (index: number, total: number) => void): void {
     this.onAnimationTick = cb;
   }
+
+  // --- Shared chart building blocks ---
+
+  private buildScales(): Record<string, any> {
+    return {
+      x: {
+        ticks: {
+          color: '#64748b',
+          font: { family: "'JetBrains Mono', monospace", size: 10 },
+          maxTicksLimit: 20,
+          maxRotation: 0,
+        },
+        grid: { color: 'rgba(100, 116, 139, 0.1)' },
+      },
+      y: {
+        type: 'linear',
+        position: 'left',
+        title: {
+          display: true,
+          text: 'Requests / Second',
+          color: '#64748b',
+          font: { family: "'JetBrains Mono', monospace", size: 11 },
+        },
+        ticks: {
+          color: '#64748b',
+          font: { family: "'JetBrains Mono', monospace", size: 10 },
+          callback: (val: number) => val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val,
+        },
+        grid: { color: 'rgba(100, 116, 139, 0.1)' },
+        beginAtZero: true,
+      },
+      y1: {
+        type: 'linear',
+        position: 'right',
+        title: {
+          display: true,
+          text: 'Pod Count',
+          color: '#b347d9',
+          font: { family: "'JetBrains Mono', monospace", size: 11 },
+        },
+        ticks: {
+          color: '#b347d9',
+          font: { family: "'JetBrains Mono', monospace", size: 10 },
+          stepSize: 1,
+        },
+        grid: { drawOnChartArea: false },
+        beginAtZero: true,
+      },
+    };
+  }
+
+  private buildPlugins(withTooltipCallbacks: boolean = false): Record<string, any> {
+    const tooltip: any = {
+      backgroundColor: 'rgba(10, 14, 26, 0.95)',
+      titleColor: '#00d4ff',
+      bodyColor: '#e2e8f0',
+      borderColor: 'rgba(0, 212, 255, 0.3)',
+      borderWidth: 1,
+      titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
+      bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
+      padding: 12,
+    };
+
+    if (withTooltipCallbacks) {
+      tooltip.callbacks = {
+        label: (context: any) => {
+          const label = context.dataset.label || '';
+          const value = context.parsed.y;
+          if (label.includes('Pods')) return `${label}: ${value}`;
+          return `${label}: ${Math.round(value).toLocaleString()}`;
+        },
+      };
+    }
+
+    return {
+      legend: {
+        labels: {
+          color: '#94a3b8',
+          font: { family: "'JetBrains Mono', monospace", size: 11 },
+          usePointStyle: true,
+          pointStyle: 'line',
+          padding: 16,
+        },
+      },
+      tooltip,
+    };
+  }
+
+  /** Builds the standard simulation datasets. Pass empty arrays for animated (progressive) mode. */
+  private buildDatasets(
+    snapshots: TickSnapshot[],
+    preloaded: boolean,
+  ): any[] {
+    const hasQueue = snapshots.some(s => s.queue_depth > 0);
+
+    const capacitySegment = {
+      borderColor: (ctx: any) => {
+        const idx = ctx.p0DataIndex;
+        if (idx < snapshots.length && snapshots[idx].capacity_rps < snapshots[idx].traffic_rps) {
+          return COLORS.capacityRed;
+        }
+        return COLORS.capacityGreen;
+      },
+    };
+
+    const datasets: any[] = [
+      {
+        label: 'Traffic (RPS)',
+        data: preloaded ? snapshots.map(s => s.traffic_rps) : [],
+        borderColor: COLORS.traffic,
+        backgroundColor: COLORS.trafficFill,
+        fill: true,
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.2,
+        yAxisID: 'y',
+        order: 2,
+      },
+      {
+        label: 'Capacity (RPS)',
+        data: preloaded ? snapshots.map(s => s.capacity_rps) : [],
+        borderColor: COLORS.capacity,
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.2,
+        yAxisID: 'y',
+        order: 1,
+        segment: capacitySegment,
+      },
+      {
+        label: 'Dropped (RPS)',
+        data: preloaded ? snapshots.map(s => s.dropped_requests) : [],
+        borderColor: COLORS.dropped,
+        backgroundColor: COLORS.droppedFill,
+        fill: true,
+        borderWidth: 1,
+        pointRadius: 0,
+        tension: 0.2,
+        yAxisID: 'y',
+        order: 0,
+      },
+      {
+        label: 'Running Pods',
+        data: preloaded ? snapshots.map(s => s.running_pods) : [],
+        borderColor: COLORS.pods,
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.2,
+        yAxisID: 'y1',
+        order: 3,
+        borderDash: [5, 3],
+      },
+    ];
+
+    if (hasQueue) {
+      datasets.push({
+        label: 'Queue Depth',
+        data: preloaded ? snapshots.map(s => s.queue_depth) : ([] as number[]),
+        borderColor: COLORS.queue,
+        backgroundColor: COLORS.queueFill,
+        fill: true,
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.2,
+        yAxisID: 'y',
+        order: 0,
+        borderDash: [3, 2],
+      });
+    }
+
+    return datasets;
+  }
+
+  /** Builds a label -> index map for safe dataset access by name. */
+  private indexDatasets(datasets: any[]): void {
+    this.datasetIndex.clear();
+    for (let i = 0; i < datasets.length; i++) {
+      this.datasetIndex.set(datasets[i].label, i);
+    }
+  }
+
+  private getDatasetByLabel(label: string): any | null {
+    const idx = this.datasetIndex.get(label);
+    if (idx !== undefined && this.chart) {
+      return this.chart.data.datasets[idx];
+    }
+    return null;
+  }
+
+  // --- Render methods ---
 
   async renderAnimated(
     canvasId: string,
@@ -74,170 +269,25 @@ export class ChartRenderer {
     if (!ctx) return;
 
     const snapshots = result.snapshots;
-    const labels = snapshots.map(s => this.formatTime(s.time));
+    const datasets = this.buildDatasets(snapshots, false);
+    this.indexDatasets(datasets);
 
     this.chart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'Traffic (RPS)',
-            data: [],
-            borderColor: COLORS.traffic,
-            backgroundColor: COLORS.trafficFill,
-            fill: true,
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-            order: 2,
-          },
-          {
-            label: 'Capacity (RPS)',
-            data: [],
-            borderColor: COLORS.capacity,
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-            order: 1,
-            segment: {
-              borderColor: (ctx: any) => {
-                const idx = ctx.p0DataIndex;
-                if (idx < snapshots.length && snapshots[idx].capacity_rps < snapshots[idx].traffic_rps) {
-                  return COLORS.capacityRed;
-                }
-                return COLORS.capacityGreen;
-              },
-            },
-          },
-          {
-            label: 'Dropped (RPS)',
-            data: [],
-            borderColor: COLORS.dropped,
-            backgroundColor: COLORS.droppedFill,
-            fill: true,
-            borderWidth: 1,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-            order: 0,
-          },
-          {
-            label: 'Running Pods',
-            data: [],
-            borderColor: COLORS.pods,
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y1',
-            order: 3,
-            borderDash: [5, 3],
-          },
-          ...(snapshots.some(s => s.queue_depth > 0) ? [{
-            label: 'Queue Depth',
-            data: [] as number[],
-            borderColor: COLORS.queue,
-            backgroundColor: COLORS.queueFill,
-            fill: true,
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-            order: 0,
-            borderDash: [3, 2],
-          }] : []),
-        ],
+        labels: snapshots.map(s => this.formatTime(s.time)),
+        datasets,
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        interaction: {
-          mode: 'index',
-          intersect: false,
-        },
-        plugins: {
-          legend: {
-            labels: {
-              color: '#94a3b8',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-              usePointStyle: true,
-              pointStyle: 'line',
-              padding: 16,
-            },
-          },
-          tooltip: {
-            backgroundColor: 'rgba(10, 14, 26, 0.95)',
-            titleColor: '#00d4ff',
-            bodyColor: '#e2e8f0',
-            borderColor: 'rgba(0, 212, 255, 0.3)',
-            borderWidth: 1,
-            titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
-            bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
-            padding: 12,
-            callbacks: {
-              label: (context: any) => {
-                const label = context.dataset.label || '';
-                const value = context.parsed.y;
-                if (label.includes('Pods')) return `${label}: ${value}`;
-                return `${label}: ${Math.round(value).toLocaleString()}`;
-              },
-            },
-          },
-        },
-        scales: {
-          x: {
-            ticks: {
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              maxTicksLimit: 20,
-              maxRotation: 0,
-            },
-            grid: { color: 'rgba(100, 116, 139, 0.1)' },
-          },
-          y: {
-            type: 'linear',
-            position: 'left',
-            title: {
-              display: true,
-              text: 'Requests / Second',
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-            },
-            ticks: {
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              callback: (val: number) => val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val,
-            },
-            grid: { color: 'rgba(100, 116, 139, 0.1)' },
-            beginAtZero: true,
-          },
-          y1: {
-            type: 'linear',
-            position: 'right',
-            title: {
-              display: true,
-              text: 'Pod Count',
-              color: '#b347d9',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-            },
-            ticks: {
-              color: '#b347d9',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              stepSize: 1,
-            },
-            grid: { drawOnChartArea: false },
-            beginAtZero: true,
-          },
-        },
+        interaction: { mode: 'index', intersect: false },
+        plugins: this.buildPlugins(true),
+        scales: this.buildScales(),
       },
     });
 
-    // Start animation
     this.isPlaying = true;
     this.animate(snapshots);
   }
@@ -248,17 +298,20 @@ export class ChartRenderer {
     const ticksPerFrame = Math.max(1, Math.round(this.playbackSpeed));
     const nextIndex = Math.min(this.currentIndex + ticksPerFrame, snapshots.length);
 
-    // Add data points
-    const hasQueue = this.chart.data.datasets.length > 4;
+    // Add data points by label (no fragile index assumptions)
+    const trafficDs = this.getDatasetByLabel('Traffic (RPS)');
+    const capacityDs = this.getDatasetByLabel('Capacity (RPS)');
+    const droppedDs = this.getDatasetByLabel('Dropped (RPS)');
+    const podsDs = this.getDatasetByLabel('Running Pods');
+    const queueDs = this.getDatasetByLabel('Queue Depth');
+
     for (let i = this.currentIndex; i < nextIndex; i++) {
       const snap = snapshots[i];
-      this.chart.data.datasets[0].data.push(snap.traffic_rps);
-      this.chart.data.datasets[1].data.push(snap.capacity_rps);
-      this.chart.data.datasets[2].data.push(snap.dropped_requests);
-      this.chart.data.datasets[3].data.push(snap.running_pods);
-      if (hasQueue) {
-        this.chart.data.datasets[4].data.push(snap.queue_depth);
-      }
+      if (trafficDs) trafficDs.data.push(snap.traffic_rps);
+      if (capacityDs) capacityDs.data.push(snap.capacity_rps);
+      if (droppedDs) droppedDs.data.push(snap.dropped_requests);
+      if (podsDs) podsDs.data.push(snap.running_pods);
+      if (queueDs) queueDs.data.push(snap.queue_depth);
     }
 
     this.currentIndex = nextIndex;
@@ -294,147 +347,22 @@ export class ChartRenderer {
     if (!ctx) return;
 
     const snapshots = result.snapshots;
+    const datasets = this.buildDatasets(snapshots, true);
+    this.indexDatasets(datasets);
 
     this.chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: snapshots.map(s => this.formatTime(s.time)),
-        datasets: [
-          {
-            label: 'Traffic (RPS)',
-            data: snapshots.map(s => s.traffic_rps),
-            borderColor: COLORS.traffic,
-            backgroundColor: COLORS.trafficFill,
-            fill: true,
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-          },
-          {
-            label: 'Capacity (RPS)',
-            data: snapshots.map(s => s.capacity_rps),
-            borderColor: COLORS.capacity,
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-            segment: {
-              borderColor: (ctx: any) => {
-                const idx = ctx.p0DataIndex;
-                if (idx < snapshots.length && snapshots[idx].capacity_rps < snapshots[idx].traffic_rps) {
-                  return COLORS.capacityRed;
-                }
-                return COLORS.capacityGreen;
-              },
-            },
-          },
-          {
-            label: 'Dropped (RPS)',
-            data: snapshots.map(s => s.dropped_requests),
-            borderColor: COLORS.dropped,
-            backgroundColor: COLORS.droppedFill,
-            fill: true,
-            borderWidth: 1,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-          },
-          {
-            label: 'Running Pods',
-            data: snapshots.map(s => s.running_pods),
-            borderColor: COLORS.pods,
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y1',
-            borderDash: [5, 3],
-          },
-          ...(snapshots.some(s => s.queue_depth > 0) ? [{
-            label: 'Queue Depth',
-            data: snapshots.map(s => s.queue_depth),
-            borderColor: COLORS.queue,
-            backgroundColor: COLORS.queueFill,
-            fill: true,
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.2,
-            yAxisID: 'y',
-            borderDash: [3, 2],
-          }] : []),
-        ],
+        datasets,
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 500 },
         interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: {
-            labels: {
-              color: '#94a3b8',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-              usePointStyle: true,
-              pointStyle: 'line',
-              padding: 16,
-            },
-          },
-          tooltip: {
-            backgroundColor: 'rgba(10, 14, 26, 0.95)',
-            titleColor: '#00d4ff',
-            bodyColor: '#e2e8f0',
-            borderColor: 'rgba(0, 212, 255, 0.3)',
-            borderWidth: 1,
-            titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
-            bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
-            padding: 12,
-          },
-        },
-        scales: {
-          x: {
-            ticks: {
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              maxTicksLimit: 20,
-              maxRotation: 0,
-            },
-            grid: { color: 'rgba(100, 116, 139, 0.1)' },
-          },
-          y: {
-            type: 'linear',
-            position: 'left',
-            title: {
-              display: true,
-              text: 'Requests / Second',
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-            },
-            ticks: {
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              callback: (val: number) => val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val,
-            },
-            grid: { color: 'rgba(100, 116, 139, 0.1)' },
-            beginAtZero: true,
-          },
-          y1: {
-            type: 'linear',
-            position: 'right',
-            title: {
-              display: true,
-              text: 'Pod Count',
-              color: '#b347d9',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-            },
-            ticks: {
-              color: '#b347d9',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              stepSize: 1,
-            },
-            grid: { drawOnChartArea: false },
-            beginAtZero: true,
-          },
-        },
+        plugins: this.buildPlugins(),
+        scales: this.buildScales(),
       },
     });
   }
@@ -523,72 +451,8 @@ export class ChartRenderer {
         maintainAspectRatio: false,
         animation: { duration: 400 },
         interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: {
-            labels: {
-              color: '#94a3b8',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-              usePointStyle: true,
-              pointStyle: 'line',
-              padding: 16,
-            },
-          },
-          tooltip: {
-            backgroundColor: 'rgba(10, 14, 26, 0.95)',
-            titleColor: '#00d4ff',
-            bodyColor: '#e2e8f0',
-            borderColor: 'rgba(0, 212, 255, 0.3)',
-            borderWidth: 1,
-            titleFont: { family: "'JetBrains Mono', monospace", size: 12 },
-            bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
-            padding: 12,
-          },
-        },
-        scales: {
-          x: {
-            ticks: {
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              maxTicksLimit: 20,
-              maxRotation: 0,
-            },
-            grid: { color: 'rgba(100, 116, 139, 0.1)' },
-          },
-          y: {
-            type: 'linear',
-            position: 'left',
-            title: {
-              display: true,
-              text: 'Requests / Second',
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-            },
-            ticks: {
-              color: '#64748b',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              callback: (val: number) => val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val,
-            },
-            grid: { color: 'rgba(100, 116, 139, 0.1)' },
-            beginAtZero: true,
-          },
-          y1: {
-            type: 'linear',
-            position: 'right',
-            title: {
-              display: true,
-              text: 'Pod Count',
-              color: '#b347d9',
-              font: { family: "'JetBrains Mono', monospace", size: 11 },
-            },
-            ticks: {
-              color: '#b347d9',
-              font: { family: "'JetBrains Mono', monospace", size: 10 },
-              stepSize: 1,
-            },
-            grid: { drawOnChartArea: false },
-            beginAtZero: true,
-          },
-        },
+        plugins: this.buildPlugins(),
+        scales: this.buildScales(),
       },
     });
   }

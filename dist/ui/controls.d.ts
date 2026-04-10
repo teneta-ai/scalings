@@ -24,6 +24,7 @@ export declare class UIControls {
     private bindPlatformSelector;
     private bindStepControls;
     private bindChaosToggle;
+    private bindCollapsibleSection;
     private bindFailureEventControls;
     private bindQueueToggle;
     private getQueueConfig;

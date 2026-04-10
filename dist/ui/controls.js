@@ -280,20 +280,7 @@ export class UIControls {
         });
     }
     bindAdvancedToggle() {
-        const toggle = document.getElementById('advanced-toggle');
-        const content = document.getElementById('advanced-content');
-        if (toggle && content) {
-            toggle.addEventListener('click', () => {
-                content.classList.toggle('collapsed');
-                toggle.classList.toggle('expanded');
-                const isExpanded = !content.classList.contains('collapsed');
-                toggle.setAttribute('aria-expanded', String(isExpanded));
-                const arrow = toggle.querySelector('.toggle-arrow');
-                if (arrow) {
-                    arrow.textContent = isExpanded ? '\u25BC' : '\u25B6';
-                }
-            });
-        }
+        this.bindCollapsibleSection('advanced-toggle', 'advanced-content');
     }
     bindPresets() {
         const container = document.getElementById('preset-buttons');
@@ -348,8 +335,11 @@ export class UIControls {
         }
     }
     bindChaosToggle() {
-        const toggle = document.getElementById('chaos-toggle');
-        const content = document.getElementById('chaos-content');
+        this.bindCollapsibleSection('chaos-toggle', 'chaos-content');
+    }
+    bindCollapsibleSection(toggleId, contentId) {
+        const toggle = document.getElementById(toggleId);
+        const content = document.getElementById(contentId);
         if (toggle && content) {
             toggle.addEventListener('click', () => {
                 content.classList.toggle('collapsed');

@@ -197,33 +197,12 @@ export class LocalSimulationService {
                 && delayedUtilization > 0) {
                 logEntries.push(`Already at min replicas (${scaling.min_replicas}), cannot scale down further`);
             }
-            // --- Calculate results ---
-            let served;
-            let dropped;
-            if (queue.enabled) {
-                // Queue mode: incoming traffic + queued backlog compete for capacity
-                const totalDemand = currentTraffic + queuedRequests;
-                served = Math.min(totalDemand, capacity);
-                const unserved = totalDemand - served;
-                // Unserved requests go into the queue (up to max_size)
-                if (queue.max_size > 0) {
-                    queuedRequests = Math.min(unserved, queue.max_size);
-                    dropped = Math.max(0, unserved - queue.max_size);
-                }
-                else {
-                    // max_size 0 = unlimited queue
-                    queuedRequests = unserved;
-                    dropped = 0;
-                }
-                if (queuedRequests > 0) {
-                    logEntries.push(`Queue depth: ${Math.round(queuedRequests)} requests buffered`);
-                }
-            }
-            else {
-                // OLTP mode: excess traffic is dropped immediately
-                served = Math.min(currentTraffic, capacity);
-                dropped = Math.max(0, currentTraffic - capacity);
-            }
+            // --- Resolve overflow (OLTP drop vs Queue buffer) ---
+            const overflow = this.resolveOverflow(currentTraffic, capacity, queuedRequests, queue);
+            const { served, dropped } = overflow;
+            queuedRequests = overflow.queueDepth;
+            for (const msg of overflow.logEntries)
+                logEntries.push(msg);
             // Log drop transitions
             if (dropped > 0 && !prevDropping) {
                 if (queue.enabled) {
@@ -274,6 +253,40 @@ export class LocalSimulationService {
         }
         const summary = this.calculateSummary(snapshots, simulation.tick_interval);
         return { snapshots, summary };
+    }
+    /**
+     * Determines how overflow traffic is handled for a single tick.
+     * OLTP mode: excess is dropped immediately.
+     * Queue mode: excess is buffered, only dropped when queue is full.
+     */
+    resolveOverflow(traffic, capacity, currentQueueDepth, queue) {
+        const logEntries = [];
+        if (!queue.enabled) {
+            return {
+                served: Math.min(traffic, capacity),
+                dropped: Math.max(0, traffic - capacity),
+                queueDepth: 0,
+                logEntries,
+            };
+        }
+        const totalDemand = traffic + currentQueueDepth;
+        const served = Math.min(totalDemand, capacity);
+        const unserved = totalDemand - served;
+        let queueDepth;
+        let dropped;
+        if (queue.max_size > 0) {
+            queueDepth = Math.min(unserved, queue.max_size);
+            dropped = Math.max(0, unserved - queue.max_size);
+        }
+        else {
+            // max_size 0 = unlimited queue
+            queueDepth = unserved;
+            dropped = 0;
+        }
+        if (queueDepth > 0) {
+            logEntries.push(`Queue depth: ${Math.round(queueDepth)} requests buffered`);
+        }
+        return { served, dropped, queueDepth, logEntries };
     }
     calculateSummary(snapshots, tickInterval) {
         let totalRequests = 0;
