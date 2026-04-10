@@ -110,6 +110,8 @@ src/
 7. **main.ts**: Add to `renderSummary()` if it has a summary stat
 8. **tests**: Add tests for simulation behavior, config round-trip, and edge cases
 9. **presets**: Update preset merging in `bindPresets()` if adding a new config section
+10. **llms.txt**: Update config example JSON, entity docs, and field descriptions
+11. **README.md**: Update feature list, config entity descriptions, and preset table if changed
 
 ## Testing Conventions
 
