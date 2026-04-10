@@ -148,6 +148,7 @@ export interface TickSnapshot {
   delayed_utilization: number; // utilization the autoscaler sees (with delay)
   estimated_cost: number;      // cumulative cost in USD
   scale_event: 'up' | 'down' | null;
+  log_entries: string[];
 }
 
 export interface SimulationResult {

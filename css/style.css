@@ -152,8 +152,59 @@ header {
   border-color: var(--border-subtle);
 }
 
-.header-docs-btn:hover {
+.header-docs-btn:hover,
+.header-feedback-btn:hover {
   color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.feedback-wrapper {
+  position: relative;
+}
+
+.header-feedback-btn {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
+  cursor: pointer;
+}
+
+.feedback-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  min-width: 170px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.feedback-dropdown.open {
+  display: block;
+}
+
+.feedback-dropdown a {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.8rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.feedback-dropdown a:hover {
+  background: var(--input-bg);
+  color: var(--cyan);
+}
+
+.feedback-dropdown a + a {
+  border-top: 1px solid var(--border-subtle);
 }
 
 .github-badge {
@@ -847,6 +898,106 @@ button:active, .btn:active {
   opacity: 1;
   color: var(--purple);
 }
+
+/* --- Decision Log --- */
+.log-section {
+  margin-top: 1.2rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.75rem;
+}
+
+.log-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 0.5rem;
+  font-weight: 400;
+}
+
+.log-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  flex-wrap: wrap;
+}
+
+.log-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.log-filter-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--cyan);
+}
+
+.log-toolbar-sep {
+  width: 1px;
+  height: 1rem;
+  background: var(--border-subtle);
+  margin: 0 0.15rem;
+  flex-shrink: 0;
+}
+
+.log-action-btn {
+  font-size: 0.68rem !important;
+  padding: 0.15rem 0.5rem !important;
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+}
+
+.log-action-btn:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.log-entries {
+  max-height: 320px;
+  overflow-y: auto;
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) transparent;
+}
+
+.log-line {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.log-line:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.log-time {
+  color: var(--text-muted);
+  min-width: 48px;
+  flex-shrink: 0;
+}
+
+.log-msg {
+  color: var(--text-secondary);
+}
+
+.log-line[data-type="scale-up"] .log-msg { color: var(--cyan); }
+.log-line[data-type="scale-down"] .log-msg { color: var(--purple); }
+.log-line[data-type="failure"] .log-msg { color: var(--red); }
+.log-line[data-type="drop"] .log-msg { color: var(--red); }
+.log-line[data-type="recover"] .log-msg { color: var(--lime); }
+.log-line[data-type="ready"] .log-msg { color: var(--lime); }
+.log-line[data-type="shutdown"] .log-msg { color: var(--text-muted); }
+.log-line[data-type="cooldown"] .log-msg { color: var(--yellow, #facc15); }
+.log-line[data-type="max-replicas"] .log-msg { color: var(--yellow, #facc15); }
+.log-line[data-type="min-replicas"] .log-msg { color: var(--text-muted); }
 
 /* --- Export Section --- */
 .export-cards {

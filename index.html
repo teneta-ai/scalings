@@ -49,6 +49,19 @@
     <h1 class="logo">scalings<span class="logo-dot">.xyz</span></h1>
     <div class="header-actions">
       <a href="#docs" class="btn btn-small header-docs-btn">Docs</a>
+      <div class="feedback-wrapper">
+        <button class="btn btn-small header-feedback-btn" aria-label="Submit feedback" title="Feature request or bug report">Feedback</button>
+        <div class="feedback-dropdown" role="menu">
+          <a href="https://github.com/Agitolyev/scalings/issues/new?template=feature_request.md&title=%5BFeature%5D+" target="_blank" rel="noopener noreferrer" role="menuitem">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7.25-3.25v2.5h2.5a.75.75 0 0 1 0 1.5h-2.5v2.5a.75.75 0 0 1-1.5 0v-2.5h-2.5a.75.75 0 0 1 0-1.5h2.5v-2.5a.75.75 0 0 1 1.5 0Z"/></svg>
+            Feature request
+          </a>
+          <a href="https://github.com/Agitolyev/scalings/issues/new?template=bug_report.md&title=%5BBug%5D+" target="_blank" rel="noopener noreferrer" role="menuitem">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.72.22a.75.75 0 0 1 1.06 0l1 1a.75.75 0 0 1-1.06 1.06l-.22-.22A4.5 4.5 0 0 0 3.5 6h9a4.5 4.5 0 0 0-2-3.94l-.22.22a.75.75 0 1 1-1.06-1.06l1-1a.75.75 0 0 1 1.06 0l.22.22A6 6 0 0 1 14 6v1h1.25a.75.75 0 0 1 0 1.5H14v1a5.98 5.98 0 0 1-.88 3.13l1.16 1.16a.75.75 0 1 1-1.06 1.06l-1.16-1.16A5.98 5.98 0 0 1 9 14.73V9.5h-2v5.23a5.98 5.98 0 0 1-3.06-1.77L2.78 14.12a.75.75 0 0 1-1.06-1.06l1.16-1.16A5.98 5.98 0 0 1 2 8.87v-.62H.75a.75.75 0 0 1 0-1.5H2V6a6 6 0 0 1 2.5-4.88l-.22-.22a.75.75 0 0 1 0-1.06ZM5.5 7.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm6-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg>
+            Report a bug
+          </a>
+        </div>
+      </div>
       <a href="https://github.com/teneta-ai/scalings" target="_blank" rel="noopener noreferrer" class="github-badge" title="View on GitHub" aria-label="GitHub repository">
         <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       </a>
@@ -424,6 +437,34 @@
             <div class="stat-label">Estimated Cost</div>
             <div class="stat-value" id="stat-cost">-</div>
             <button class="cost-basis-btn" id="cost-hint" title="Open Advanced Parameters and adjust cost per pod/hour">Adjust Cost Basis</button>
+          </div>
+        </div>
+
+        <!-- DECISION LOG -->
+        <div class="log-section">
+          <button class="toggle-btn" id="log-toggle" aria-expanded="false">
+            <span class="toggle-arrow">&#9654;</span> Decision Log
+            <span class="log-count" id="log-count"></span>
+          </button>
+          <div id="log-content" class="collapsible-content collapsed">
+            <div class="log-toolbar">
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-scale" checked> Scale events
+              </label>
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-lifecycle" checked> Pod lifecycle
+              </label>
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-failures" checked> Failures
+              </label>
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-traffic" checked> Traffic drops
+              </label>
+              <span class="log-toolbar-sep"></span>
+              <button id="btn-log-copy" class="btn btn-small log-action-btn" title="Copy log to clipboard">Copy All</button>
+              <button id="btn-log-download" class="btn btn-small log-action-btn" title="Download log as .txt file">Download</button>
+            </div>
+            <div id="log-entries" class="log-entries"></div>
           </div>
         </div>
 

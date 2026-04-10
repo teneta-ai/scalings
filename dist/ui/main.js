@@ -172,6 +172,57 @@ class App {
                 }
             });
         }
+        // Log toggle
+        const logToggle = document.getElementById('log-toggle');
+        const logContent = document.getElementById('log-content');
+        if (logToggle && logContent) {
+            logToggle.addEventListener('click', () => {
+                logContent.classList.toggle('collapsed');
+                logToggle.classList.toggle('expanded');
+                const isExpanded = !logContent.classList.contains('collapsed');
+                logToggle.setAttribute('aria-expanded', String(isExpanded));
+                const arrow = logToggle.querySelector('.toggle-arrow');
+                if (arrow)
+                    arrow.textContent = isExpanded ? '\u25BC' : '\u25B6';
+            });
+        }
+        // Log filters
+        for (const id of ['log-filter-scale', 'log-filter-lifecycle', 'log-filter-failures', 'log-filter-traffic']) {
+            const el = document.getElementById(id);
+            if (el)
+                el.addEventListener('change', () => this.applyLogFilters());
+        }
+        // Log copy & download
+        const logCopyBtn = document.getElementById('btn-log-copy');
+        if (logCopyBtn) {
+            logCopyBtn.addEventListener('click', () => {
+                const text = this.getLogText();
+                if (!text)
+                    return;
+                navigator.clipboard.writeText(text).then(() => this.showToast('Log copied to clipboard', 'success'));
+            });
+        }
+        const logDownloadBtn = document.getElementById('btn-log-download');
+        if (logDownloadBtn) {
+            logDownloadBtn.addEventListener('click', () => {
+                const text = this.getLogText();
+                if (!text)
+                    return;
+                this.offerDownload(text, 'simulation-log.txt', 'text/plain');
+            });
+        }
+        // Feedback dropdown
+        const feedbackBtn = document.querySelector('.header-feedback-btn');
+        const feedbackDropdown = document.querySelector('.feedback-dropdown');
+        if (feedbackBtn && feedbackDropdown) {
+            feedbackBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                feedbackDropdown.classList.toggle('open');
+            });
+            document.addEventListener('click', () => {
+                feedbackDropdown.classList.remove('open');
+            });
+        }
         // Drag and drop for YAML import
         document.addEventListener('dragover', (e) => e.preventDefault());
         document.addEventListener('drop', (e) => {
@@ -220,6 +271,7 @@ class App {
                 await this.chart.renderAnimated('sim-chart', result, speed);
             }
             this.renderSummary(result.summary);
+            this.renderLog(result.snapshots);
         }
         catch (err) {
             console.error('Simulation error:', err);
@@ -252,6 +304,87 @@ class App {
         if (dropRateEl) {
             dropRateEl.classList.toggle('danger', summary.drop_rate_percent > 1);
         }
+    }
+    // --- Decision Log ---
+    classifyLog(msg) {
+        if (msg.startsWith('Scaled up'))
+            return { type: 'scale-up', category: 'scale' };
+        if (msg.startsWith('Scaled down'))
+            return { type: 'scale-down', category: 'scale' };
+        if (msg.startsWith('Scale-up needed but cooldown'))
+            return { type: 'cooldown', category: 'scale' };
+        if (msg.startsWith('At max replicas'))
+            return { type: 'max-replicas', category: 'scale' };
+        if (msg.startsWith('Already at min replicas'))
+            return { type: 'min-replicas', category: 'scale' };
+        if (msg.includes('finished starting'))
+            return { type: 'ready', category: 'lifecycle' };
+        if (msg.includes('graceful shutdown'))
+            return { type: 'shutdown', category: 'lifecycle' };
+        if (msg.includes('failure') || msg.includes('killed'))
+            return { type: 'failure', category: 'failures' };
+        if (msg.startsWith('Dropping'))
+            return { type: 'drop', category: 'traffic' };
+        if (msg.startsWith('Recovered'))
+            return { type: 'recover', category: 'traffic' };
+        return { type: 'info', category: 'scale' };
+    }
+    renderLog(snapshots) {
+        const container = document.getElementById('log-entries');
+        const countEl = document.getElementById('log-count');
+        if (!container)
+            return;
+        container.innerHTML = '';
+        let eventCount = 0;
+        for (const snap of snapshots) {
+            if (snap.log_entries.length === 0)
+                continue;
+            for (const msg of snap.log_entries) {
+                eventCount++;
+                const { type, category } = this.classifyLog(msg);
+                const line = document.createElement('div');
+                line.className = 'log-line';
+                line.dataset.type = type;
+                line.dataset.category = category;
+                const timeStr = snap.time >= 3600
+                    ? `${Math.floor(snap.time / 3600)}h${Math.floor((snap.time % 3600) / 60).toString().padStart(2, '0')}m${(snap.time % 60).toString().padStart(2, '0')}s`
+                    : snap.time >= 60
+                        ? `${Math.floor(snap.time / 60)}m${(snap.time % 60).toString().padStart(2, '0')}s`
+                        : `${snap.time}s`;
+                line.innerHTML = `<span class="log-time">${timeStr}</span><span class="log-msg">${msg}</span>`;
+                container.appendChild(line);
+            }
+        }
+        if (countEl)
+            countEl.textContent = `${eventCount} events`;
+        this.applyLogFilters();
+    }
+    applyLogFilters() {
+        const filters = {
+            scale: document.getElementById('log-filter-scale')?.checked ?? true,
+            lifecycle: document.getElementById('log-filter-lifecycle')?.checked ?? true,
+            failures: document.getElementById('log-filter-failures')?.checked ?? true,
+            traffic: document.getElementById('log-filter-traffic')?.checked ?? true,
+        };
+        const lines = document.querySelectorAll('.log-line');
+        for (const line of lines) {
+            const el = line;
+            const cat = el.dataset.category || 'scale';
+            el.style.display = filters[cat] ? '' : 'none';
+        }
+    }
+    getLogText() {
+        const lines = document.querySelectorAll('.log-line');
+        const parts = [];
+        for (const line of lines) {
+            const el = line;
+            if (el.style.display === 'none')
+                continue;
+            const time = el.querySelector('.log-time')?.textContent || '';
+            const msg = el.querySelector('.log-msg')?.textContent || '';
+            parts.push(`[${time}] ${msg}`);
+        }
+        return parts.join('\n');
     }
     // --- Export / Import ---
     exportSourceConfig() {
