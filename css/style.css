@@ -145,19 +145,11 @@ header {
   gap: 0.6rem;
 }
 
-.header-docs-btn,
-.header-feedback-btn {
+.header-docs-btn {
+  text-decoration: none;
   font-size: 0.75rem;
   color: var(--text-secondary);
   border-color: var(--border-subtle);
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  box-sizing: border-box;
-}
-
-.header-docs-btn {
-  text-decoration: none;
 }
 
 .header-docs-btn:hover,
@@ -171,6 +163,9 @@ header {
 }
 
 .header-feedback-btn {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
   cursor: pointer;
 }
 
