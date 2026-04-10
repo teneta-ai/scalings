@@ -7,6 +7,7 @@ import {
   Platform,
   TrafficPatternType,
   TrafficConfig,
+  QueueConfig,
   GradualParams,
   SpikeParams,
   WaveParams,
@@ -42,6 +43,7 @@ export class UIControls {
     this.bindPlatformSelector();
     this.bindStepControls();
     this.bindFailureEventControls();
+    this.bindQueueToggle();
     this.showPatternParams(this.currentPattern);
     this.updatePreview();
   }
@@ -91,6 +93,7 @@ export class UIControls {
         failure_events: this.getFailureEvents(),
       },
       traffic: this.getTrafficConfig(),
+      queue: this.getQueueConfig(),
     };
 
     return config;
@@ -133,6 +136,9 @@ export class UIControls {
 
     // Traffic
     this.setTrafficConfig(config.traffic);
+
+    // Queue
+    this.setQueueConfig(config.queue);
 
     this.updatePreview();
   }
@@ -421,6 +427,40 @@ export class UIControls {
         this.notifyChange();
       });
     }
+  }
+
+  private bindQueueToggle(): void {
+    const toggle = document.getElementById('queue-enabled') as HTMLInputElement;
+    const params = document.getElementById('queue-params');
+    if (toggle && params) {
+      toggle.addEventListener('change', () => {
+        params.classList.toggle('hidden', !toggle.checked);
+        this.notifyChange();
+      });
+    }
+
+    const maxSizeInput = document.getElementById('param-queue_max_size') as HTMLInputElement;
+    if (maxSizeInput) {
+      maxSizeInput.addEventListener('input', () => this.notifyChange());
+    }
+  }
+
+  private getQueueConfig(): QueueConfig {
+    const toggle = document.getElementById('queue-enabled') as HTMLInputElement;
+    return {
+      enabled: toggle ? toggle.checked : false,
+      max_size: this.getNumericValue('param-queue_max_size', DEFAULT_CONFIG.queue.max_size),
+    };
+  }
+
+  private setQueueConfig(queue: QueueConfig): void {
+    const toggle = document.getElementById('queue-enabled') as HTMLInputElement;
+    const params = document.getElementById('queue-params');
+    if (toggle) {
+      toggle.checked = queue.enabled;
+      if (params) params.classList.toggle('hidden', !queue.enabled);
+    }
+    this.setNumericValue('param-queue_max_size', queue.max_size);
   }
 
   private getFailureEvents(): FailureEvent[] {

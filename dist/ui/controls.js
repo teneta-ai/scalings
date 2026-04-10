@@ -19,6 +19,7 @@ export class UIControls {
         this.bindPlatformSelector();
         this.bindStepControls();
         this.bindFailureEventControls();
+        this.bindQueueToggle();
         this.showPatternParams(this.currentPattern);
         this.updatePreview();
     }
@@ -65,6 +66,7 @@ export class UIControls {
                 failure_events: this.getFailureEvents(),
             },
             traffic: this.getTrafficConfig(),
+            queue: this.getQueueConfig(),
         };
         return config;
     }
@@ -99,6 +101,8 @@ export class UIControls {
         this.setFailureEvents(config.chaos.failure_events);
         // Traffic
         this.setTrafficConfig(config.traffic);
+        // Queue
+        this.setQueueConfig(config.queue);
         this.updatePreview();
     }
     // --- Traffic config helpers ---
@@ -366,6 +370,37 @@ export class UIControls {
                 this.notifyChange();
             });
         }
+    }
+    bindQueueToggle() {
+        const toggle = document.getElementById('queue-enabled');
+        const params = document.getElementById('queue-params');
+        if (toggle && params) {
+            toggle.addEventListener('change', () => {
+                params.classList.toggle('hidden', !toggle.checked);
+                this.notifyChange();
+            });
+        }
+        const maxSizeInput = document.getElementById('param-queue_max_size');
+        if (maxSizeInput) {
+            maxSizeInput.addEventListener('input', () => this.notifyChange());
+        }
+    }
+    getQueueConfig() {
+        const toggle = document.getElementById('queue-enabled');
+        return {
+            enabled: toggle ? toggle.checked : false,
+            max_size: this.getNumericValue('param-queue_max_size', DEFAULT_CONFIG.queue.max_size),
+        };
+    }
+    setQueueConfig(queue) {
+        const toggle = document.getElementById('queue-enabled');
+        const params = document.getElementById('queue-params');
+        if (toggle) {
+            toggle.checked = queue.enabled;
+            if (params)
+                params.classList.toggle('hidden', !queue.enabled);
+        }
+        this.setNumericValue('param-queue_max_size', queue.max_size);
     }
     getFailureEvents() {
         const container = document.getElementById('failure-events-container');

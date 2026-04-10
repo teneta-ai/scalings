@@ -16,6 +16,8 @@ interface ChartColors {
   pods: string;
   dropped: string;
   droppedFill: string;
+  queue: string;
+  queueFill: string;
 }
 
 const COLORS: ChartColors = {
@@ -27,6 +29,8 @@ const COLORS: ChartColors = {
   pods: 'rgba(179, 71, 217, 0.9)',
   dropped: 'rgba(239, 68, 68, 0.9)',
   droppedFill: 'rgba(239, 68, 68, 0.25)',
+  queue: 'rgba(251, 191, 36, 0.9)',
+  queueFill: 'rgba(251, 191, 36, 0.15)',
 };
 
 export class ChartRenderer {
@@ -133,6 +137,19 @@ export class ChartRenderer {
             order: 3,
             borderDash: [5, 3],
           },
+          ...(snapshots.some(s => s.queue_depth > 0) ? [{
+            label: 'Queue Depth',
+            data: [] as number[],
+            borderColor: COLORS.queue,
+            backgroundColor: COLORS.queueFill,
+            fill: true,
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.2,
+            yAxisID: 'y',
+            order: 0,
+            borderDash: [3, 2],
+          }] : []),
         ],
       },
       options: {
@@ -232,12 +249,16 @@ export class ChartRenderer {
     const nextIndex = Math.min(this.currentIndex + ticksPerFrame, snapshots.length);
 
     // Add data points
+    const hasQueue = this.chart.data.datasets.length > 4;
     for (let i = this.currentIndex; i < nextIndex; i++) {
       const snap = snapshots[i];
       this.chart.data.datasets[0].data.push(snap.traffic_rps);
       this.chart.data.datasets[1].data.push(snap.capacity_rps);
       this.chart.data.datasets[2].data.push(snap.dropped_requests);
       this.chart.data.datasets[3].data.push(snap.running_pods);
+      if (hasQueue) {
+        this.chart.data.datasets[4].data.push(snap.queue_depth);
+      }
     }
 
     this.currentIndex = nextIndex;
@@ -329,6 +350,18 @@ export class ChartRenderer {
             yAxisID: 'y1',
             borderDash: [5, 3],
           },
+          ...(snapshots.some(s => s.queue_depth > 0) ? [{
+            label: 'Queue Depth',
+            data: snapshots.map(s => s.queue_depth),
+            borderColor: COLORS.queue,
+            backgroundColor: COLORS.queueFill,
+            fill: true,
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.2,
+            yAxisID: 'y',
+            borderDash: [3, 2],
+          }] : []),
         ],
       },
       options: {

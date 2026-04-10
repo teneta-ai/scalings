@@ -25,6 +25,9 @@ export declare class UIControls {
     private bindStepControls;
     private bindChaosToggle;
     private bindFailureEventControls;
+    private bindQueueToggle;
+    private getQueueConfig;
+    private setQueueConfig;
     private getFailureEvents;
     private setFailureEvents;
     addFailureEventRow(time?: number, count?: number): void;

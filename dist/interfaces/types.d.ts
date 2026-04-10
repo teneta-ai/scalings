@@ -25,6 +25,10 @@ export interface AdvancedParams {
     graceful_shutdown_time: number;
     cost_per_replica_hour: number;
 }
+export interface QueueConfig {
+    enabled: boolean;
+    max_size: number;
+}
 export interface FailureEvent {
     time: number;
     count: number;
@@ -81,6 +85,7 @@ export interface SimulationConfig {
     advanced: AdvancedParams;
     chaos: ChaosConfig;
     traffic: TrafficConfig;
+    queue: QueueConfig;
 }
 export interface TargetConfig {
     platform: Platform;
@@ -104,6 +109,7 @@ export interface TickSnapshot {
     shutting_down_pods: number;
     served_requests: number;
     dropped_requests: number;
+    queue_depth: number;
     utilization: number;
     delayed_utilization: number;
     estimated_cost: number;
@@ -121,6 +127,7 @@ export interface SimulationSummary {
     drop_rate_percent: number;
     peak_pod_count: number;
     min_pod_count: number;
+    peak_queue_depth: number;
     time_under_provisioned_seconds: number;
     time_under_provisioned_percent: number;
     time_to_recover_seconds: number | null;
@@ -151,6 +158,7 @@ export interface PresetScenario {
 }
 export declare const DEFAULT_SCALING: ScalingParams;
 export declare const DEFAULT_ADVANCED: AdvancedParams;
+export declare const DEFAULT_QUEUE: QueueConfig;
 export declare const DEFAULT_CHAOS: ChaosConfig;
 export declare const DEFAULT_SIMULATION: SimulationParams;
 export declare const DEFAULT_TRAFFIC: TrafficConfig;

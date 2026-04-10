@@ -11,6 +11,7 @@ import {
   ScalingParams,
   AdvancedParams,
   ChaosConfig,
+  QueueConfig,
   FailureEvent,
   SimulationParams,
   TrafficConfig,
@@ -94,6 +95,9 @@ export class LocalConfigService implements ConfigService {
     if (obj.traffic && typeof obj.traffic === 'object') {
       config.traffic = this.validateTraffic(obj.traffic as Record<string, unknown>);
     }
+    if (obj.queue && typeof obj.queue === 'object') {
+      config.queue = this.validateQueue(obj.queue as Record<string, unknown>);
+    }
 
     return config;
   }
@@ -166,6 +170,14 @@ export class LocalConfigService implements ConfigService {
     };
   }
 
+  private validateQueue(obj: Record<string, unknown>): QueueConfig {
+    const d = DEFAULT_CONFIG.queue;
+    return {
+      enabled: typeof obj.enabled === 'boolean' ? obj.enabled : d.enabled,
+      max_size: this.num(obj.max_size, d.max_size),
+    };
+  }
+
   private num(val: unknown, fallback: number): number {
     return typeof val === 'number' && !isNaN(val) ? val : fallback;
   }
@@ -220,6 +232,10 @@ export class LocalConfigService implements ConfigService {
     } else {
       lines.push('  failure_events: []');
     }
+    lines.push('');
+    lines.push('queue:');
+    lines.push(`  enabled: ${config.queue.enabled}`);
+    lines.push(`  max_size: ${config.queue.max_size}`);
     lines.push('');
     lines.push('traffic:');
     lines.push(`  pattern: ${config.traffic.pattern}`);

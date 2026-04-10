@@ -17,7 +17,7 @@ export class LocalSimulationService {
         };
     }
     async run(config) {
-        const { simulation, scaling, advanced, chaos, traffic } = config;
+        const { simulation, scaling, advanced, chaos, traffic, queue } = config;
         const totalTicks = Math.ceil(simulation.duration / simulation.tick_interval);
         // Generate traffic pattern
         const trafficData = this.trafficService.generate(traffic, simulation.duration, simulation.tick_interval);
@@ -38,6 +38,8 @@ export class LocalSimulationService {
         let lastScaleDownTime = -Infinity;
         let cumulativeCost = 0;
         const snapshots = [];
+        // Queue state
+        let queuedRequests = 0;
         // Utilization history for delayed observation
         const utilizationHistory = [];
         // Initialize with min replicas (already running)
@@ -196,11 +198,40 @@ export class LocalSimulationService {
                 logEntries.push(`Already at min replicas (${scaling.min_replicas}), cannot scale down further`);
             }
             // --- Calculate results ---
-            const served = Math.min(currentTraffic, capacity);
-            const dropped = Math.max(0, currentTraffic - capacity);
+            let served;
+            let dropped;
+            if (queue.enabled) {
+                // Queue mode: incoming traffic + queued backlog compete for capacity
+                const totalDemand = currentTraffic + queuedRequests;
+                served = Math.min(totalDemand, capacity);
+                const unserved = totalDemand - served;
+                // Unserved requests go into the queue (up to max_size)
+                if (queue.max_size > 0) {
+                    queuedRequests = Math.min(unserved, queue.max_size);
+                    dropped = Math.max(0, unserved - queue.max_size);
+                }
+                else {
+                    // max_size 0 = unlimited queue
+                    queuedRequests = unserved;
+                    dropped = 0;
+                }
+                if (queuedRequests > 0) {
+                    logEntries.push(`Queue depth: ${Math.round(queuedRequests)} requests buffered`);
+                }
+            }
+            else {
+                // OLTP mode: excess traffic is dropped immediately
+                served = Math.min(currentTraffic, capacity);
+                dropped = Math.max(0, currentTraffic - capacity);
+            }
             // Log drop transitions
             if (dropped > 0 && !prevDropping) {
-                logEntries.push(`Dropping requests: traffic ${Math.round(currentTraffic)} RPS exceeds capacity ${Math.round(capacity)} RPS (${Math.round(dropped)} RPS dropped)`);
+                if (queue.enabled) {
+                    logEntries.push(`Queue full — dropping requests: ${Math.round(dropped)} RPS overflow (queue max: ${queue.max_size})`);
+                }
+                else {
+                    logEntries.push(`Dropping requests: traffic ${Math.round(currentTraffic)} RPS exceeds capacity ${Math.round(capacity)} RPS (${Math.round(dropped)} RPS dropped)`);
+                }
                 prevDropping = true;
             }
             else if (dropped === 0 && prevDropping) {
@@ -233,6 +264,7 @@ export class LocalSimulationService {
                 shutting_down_pods: snapshotShuttingDown,
                 served_requests: served,
                 dropped_requests: dropped,
+                queue_depth: queuedRequests,
                 utilization: Math.min(utilization, 2), // Cap display at 200%
                 delayed_utilization: Math.min(delayedUtilization, 2),
                 estimated_cost: cumulativeCost,
@@ -249,6 +281,7 @@ export class LocalSimulationService {
         let totalDropped = 0;
         let peakPods = 0;
         let minPods = Infinity;
+        let peakQueueDepth = 0;
         let underProvisionedTicks = 0;
         // Track recovery: time from first drop to when system stabilizes
         let firstDropTime = null;
@@ -259,6 +292,7 @@ export class LocalSimulationService {
             totalDropped += snap.dropped_requests * tickInterval;
             peakPods = Math.max(peakPods, snap.total_pods);
             minPods = Math.min(minPods, snap.running_pods);
+            peakQueueDepth = Math.max(peakQueueDepth, snap.queue_depth);
             if (snap.dropped_requests > 0) {
                 underProvisionedTicks++;
                 if (firstDropTime === null)
@@ -285,6 +319,7 @@ export class LocalSimulationService {
             drop_rate_percent: totalRequests > 0 ? (totalDropped / totalRequests) * 100 : 0,
             peak_pod_count: peakPods,
             min_pod_count: minPods === Infinity ? 0 : minPods,
+            peak_queue_depth: peakQueueDepth,
             time_under_provisioned_seconds: underProvisionedSeconds,
             time_under_provisioned_percent: totalDuration > 0 ? (underProvisionedSeconds / totalDuration) * 100 : 0,
             time_to_recover_seconds: firstDropTime !== null && recoveredTime !== null ? recoveredTime - firstDropTime : null,

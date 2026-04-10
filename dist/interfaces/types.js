@@ -22,6 +22,10 @@ export const DEFAULT_ADVANCED = {
     graceful_shutdown_time: 30,
     cost_per_replica_hour: 0.05,
 };
+export const DEFAULT_QUEUE = {
+    enabled: false,
+    max_size: 1000,
+};
 export const DEFAULT_CHAOS = {
     pod_failure_rate: 0,
     random_seed: 0,
@@ -49,6 +53,7 @@ export const DEFAULT_CONFIG = {
     advanced: DEFAULT_ADVANCED,
     chaos: DEFAULT_CHAOS,
     traffic: DEFAULT_TRAFFIC,
+    queue: DEFAULT_QUEUE,
 };
 export const PRESET_SCENARIOS = [
     {

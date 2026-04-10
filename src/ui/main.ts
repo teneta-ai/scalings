@@ -311,6 +311,17 @@ class App {
     this.setSummaryValue('stat-dropped', this.formatNumber(summary.total_dropped));
     this.setSummaryValue('stat-drop-rate', `${summary.drop_rate_percent.toFixed(2)}%`);
     this.setSummaryValue('stat-peak-pods', summary.peak_pod_count.toString());
+
+    // Queue stat visibility
+    const queueStatCard = document.getElementById('stat-card-peak-queue');
+    if (queueStatCard) {
+      if (summary.peak_queue_depth > 0) {
+        queueStatCard.classList.remove('hidden');
+        this.setSummaryValue('stat-peak-queue', this.formatNumber(summary.peak_queue_depth));
+      } else {
+        queueStatCard.classList.add('hidden');
+      }
+    }
     this.setSummaryValue('stat-underprov-time', `${summary.time_under_provisioned_seconds}s (${summary.time_under_provisioned_percent.toFixed(1)}%)`);
     this.setSummaryValue('stat-recovery-time', summary.time_to_recover_seconds !== null ? `${summary.time_to_recover_seconds}s` : 'N/A');
     this.setSummaryValue('stat-cost', `$${summary.estimated_total_cost.toFixed(4)}`);

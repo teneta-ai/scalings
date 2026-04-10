@@ -12,6 +12,7 @@ export declare class LocalConfigService implements ConfigService {
     private validateAdvanced;
     private validateChaos;
     private validateTraffic;
+    private validateQueue;
     private num;
     private toYAML;
     private serializeTrafficParams;

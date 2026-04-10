@@ -268,6 +268,44 @@ header {
   padding: 0.75rem var(--card-padding);
 }
 
+.card.cyan-border {
+  border-left: 3px solid var(--cyan-dim);
+  padding: 0.75rem var(--card-padding);
+}
+
+/* --- Queue Mode Toggle --- */
+.queue-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.queue-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.queue-mode-toggle input[type="checkbox"] {
+  accent-color: var(--cyan);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.queue-params {
+  margin-top: 0.75rem;
+}
+
+.queue-params.hidden {
+  display: none;
+}
+
 /* --- Fieldset & Legend --- */
 fieldset {
   border: 1px solid var(--border-subtle);

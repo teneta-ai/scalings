@@ -70,6 +70,9 @@ export class LocalConfigService {
         if (obj.traffic && typeof obj.traffic === 'object') {
             config.traffic = this.validateTraffic(obj.traffic);
         }
+        if (obj.queue && typeof obj.queue === 'object') {
+            config.queue = this.validateQueue(obj.queue);
+        }
         return config;
     }
     validateSimulation(obj) {
@@ -134,6 +137,13 @@ export class LocalConfigService {
             params: (obj.params && typeof obj.params === 'object') ? obj.params : DEFAULT_CONFIG.traffic.params,
         };
     }
+    validateQueue(obj) {
+        const d = DEFAULT_CONFIG.queue;
+        return {
+            enabled: typeof obj.enabled === 'boolean' ? obj.enabled : d.enabled,
+            max_size: this.num(obj.max_size, d.max_size),
+        };
+    }
     num(val, fallback) {
         return typeof val === 'number' && !isNaN(val) ? val : fallback;
     }
@@ -185,6 +195,10 @@ export class LocalConfigService {
         else {
             lines.push('  failure_events: []');
         }
+        lines.push('');
+        lines.push('queue:');
+        lines.push(`  enabled: ${config.queue.enabled}`);
+        lines.push(`  max_size: ${config.queue.max_size}`);
         lines.push('');
         lines.push('traffic:');
         lines.push(`  pattern: ${config.traffic.pattern}`);
