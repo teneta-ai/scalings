@@ -37,7 +37,8 @@ Supported platforms:
 | Noisy Neighbor | Sinusoidal traffic + random pod failures |
 | Step Migration | Phased rollout with discrete traffic steps |
 | Bottomless Queue | Unlimited broker — no drops, backlog drains as capacity catches up |
-| Backpressure Death Spiral | Pod saturation + retries cause cascading failure |
+| Death Spiral (OLTP) | Pod saturation + retries cause cascading failure, no broker |
+| Death Spiral (Queued) | Same with a bounded broker — queue fills, requests expire |
 
 ## Development
 

@@ -94,7 +94,8 @@ The pod fleet with scaling, saturation degradation, and chaos engineering.
 - Noisy Neighbor — wave traffic + random pod failures
 - Step Migration — phased rollout with discrete traffic steps
 - Bottomless Queue — unlimited broker, no drops
-- Backpressure Death Spiral — pod saturation + retries cause cascading failure
+- Death Spiral (OLTP) — pod saturation + retries cause cascading failure, no broker
+- Death Spiral (Queued) — same with a bounded broker, queue fills and requests expire
 
 ## Who should use this
 DevOps engineers, SREs, platform teams, anyone tuning autoscaling policies.

@@ -436,10 +436,41 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
     },
   },
   {
-    name: 'Backpressure Death Spiral',
-    description: 'Pod saturation degrades capacity under load, retries amplify traffic — demonstrates how overloaded pods cause cascading failures',
+    name: 'Death Spiral (OLTP)',
+    description: 'Pod saturation + retries cause cascading failure without a broker — excess is dropped immediately, retries amplify the overload',
     config: {
-      name: 'Backpressure Death Spiral',
+      name: 'Death Spiral (OLTP)',
+      service: {
+        ...DEFAULT_SERVICE,
+        min_replicas: 3,
+        max_replicas: 30,
+        scale_up_threshold: 70,
+        scale_up_step: 3,
+        capacity_per_replica: 100,
+        startup_time: 30,
+        cooldown_scale_up: 10,
+        metric_observation_delay: 10,
+        saturation_threshold: 85,
+        max_capacity_reduction: 0.4,
+      },
+      producer: {
+        ...DEFAULT_PRODUCER,
+        traffic: {
+          pattern: 'spike',
+          params: { base_rps: 200, spike_rps: 1500, spike_start: 30, spike_duration: 60 } as SpikeParams,
+        },
+      },
+      client: {
+        max_retries: 3,
+        retry_delay: 2,
+      },
+    },
+  },
+  {
+    name: 'Death Spiral (Queued)',
+    description: 'Pod saturation + retries with a bounded broker — queue fills up, requests expire, retries amplify the overload into cascading failure',
+    config: {
+      name: 'Death Spiral (Queued)',
       service: {
         ...DEFAULT_SERVICE,
         min_replicas: 3,
