@@ -121,11 +121,13 @@ export class UIControls {
   private getClientConfig(): ClientConfig {
     return {
       max_retries: this.getNumericValue('param-max_retries', DEFAULT_CONFIG.client.max_retries),
+      retry_delay: this.getNumericValue('param-retry_delay', DEFAULT_CONFIG.client.retry_delay),
     };
   }
 
   private setClientConfig(client: ClientConfig): void {
     this.setNumericValue('param-max_retries', client.max_retries);
+    this.setNumericValue('param-retry_delay', client.retry_delay);
   }
 
   // --- Broker config helpers ---

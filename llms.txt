@@ -29,7 +29,8 @@ The config parameter is a base64-encoded JSON object matching the SimulationConf
     }
   },
   "client": {
-    "max_retries": 0
+    "max_retries": 0,
+    "retry_delay": 0
   },
   "broker": {
     "enabled": false,
@@ -63,7 +64,8 @@ Generates traffic.
 
 ### Client
 Client-side resilience behavior (reactive to failures).
-- `max_retries` (0-10): Maximum retry attempts per failed request. Each failed request is retried up to this many times, one attempt per tick. 0 = no retries. Models retry storms.
+- `max_retries` (0-10): Maximum retry attempts per failed request. 0 = no retries. Models retry storms.
+- `retry_delay` (seconds): Wait time between failure and retry. 0 = retry on next tick. Higher values spread retries over time.
 
 ### Broker (optional)
 A message queue between producer and service (like SQS, Kafka, or a buffering load balancer).

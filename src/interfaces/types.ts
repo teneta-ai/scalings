@@ -27,6 +27,7 @@ export interface ProducerConfig {
 
 export interface ClientConfig {
   max_retries: number;        // max retry attempts per request (0 = no retries)
+  retry_delay: number;        // seconds between failure and retry (0 = next tick)
 }
 
 // --- Broker: optional message queue between producer and service ---
@@ -254,6 +255,7 @@ export const DEFAULT_PRODUCER: ProducerConfig = {
 
 export const DEFAULT_CLIENT: ClientConfig = {
   max_retries: 0,
+  retry_delay: 0,
 };
 
 export const DEFAULT_BROKER: BrokerConfig = {
@@ -460,6 +462,7 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
       },
       client: {
         max_retries: 3,
+        retry_delay: 2,
       },
       broker: {
         enabled: true,

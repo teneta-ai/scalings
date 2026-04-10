@@ -10,6 +10,7 @@ export interface ProducerConfig {
 }
 export interface ClientConfig {
     max_retries: number;
+    retry_delay: number;
 }
 export interface BrokerConfig {
     enabled: boolean;

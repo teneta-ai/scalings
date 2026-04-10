@@ -410,7 +410,14 @@
               <label for="param-max_retries" title="Maximum retry attempts per failed request. 0 = no retries.">Max Retries</label>
               <input type="number" id="param-max_retries" min="0" max="10" value="0" aria-label="Max retries" title="Maximum number of times a failed request will be retried. 0 = no retries. 3 = up to 3 retry attempts.">
               <span class="unit"></span>
-              <button class="tooltip-btn" data-tooltip="Maximum number of retry attempts per failed request. When a request is dropped or expires, the client retries it on the next tick, up to this many times. Models retry storms: retries amplify traffic and can cause cascading failures. 0 = disabled.">?</button>
+              <button class="tooltip-btn" data-tooltip="Maximum number of retry attempts per failed request. When a request is dropped or expires, the client retries it up to this many times. Models retry storms: retries amplify traffic and can cause cascading failures. 0 = disabled.">?</button>
+            </div>
+
+            <div class="param-row">
+              <label for="param-retry_delay" title="Seconds between a failure and the retry attempt. 0 = retry on next tick.">Retry Delay</label>
+              <input type="number" id="param-retry_delay" min="0" max="60" value="0" aria-label="Retry delay" title="Seconds a client waits before retrying a failed request. 0 = immediate (next tick).">
+              <span class="unit">s</span>
+              <button class="tooltip-btn" data-tooltip="Seconds between a request failing and the client retrying it. Models backoff behavior. 0 = retry on the very next tick (aggressive). Higher values spread retries over time, reducing the spike but prolonging the storm.">?</button>
             </div>
           </fieldset>
         </div>

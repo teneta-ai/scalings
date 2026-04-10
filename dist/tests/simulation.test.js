@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { LocalSimulationService } from '../services/simulation.js';
-import { DEFAULT_CONFIG, DEFAULT_SERVICE, DEFAULT_BROKER, DEFAULT_PRODUCER, DEFAULT_SIMULATION, } from '../interfaces/types.js';
+import { DEFAULT_CONFIG, DEFAULT_SERVICE, DEFAULT_BROKER, DEFAULT_PRODUCER, DEFAULT_CLIENT, DEFAULT_SIMULATION, } from '../interfaces/types.js';
 const svc = new LocalSimulationService();
 // Shorthand for service overrides — includes the "fast autoscaler" defaults
 const SVC = { ...DEFAULT_SERVICE, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 0 };
@@ -716,7 +716,7 @@ describe('SimulationService — retry storms', () => {
             simulation: { duration: 30, tick_interval: 1 },
             service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
             producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
-            client: { max_retries: 3 },
+            client: { ...DEFAULT_CLIENT, max_retries: 3 },
             broker: { ...DEFAULT_BROKER, enabled: true, max_size: 200 },
         });
         const result = await svc.run(config);
@@ -730,7 +730,7 @@ describe('SimulationService — retry storms', () => {
             simulation: { duration: 20, tick_interval: 1 },
             service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
             producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
-            client: { max_retries: 0 },
+            client: { ...DEFAULT_CLIENT, max_retries: 0 },
             broker: { ...DEFAULT_BROKER, enabled: true, max_size: 200 },
         });
         const result = await svc.run(config);
@@ -743,7 +743,7 @@ describe('SimulationService — retry storms', () => {
             simulation: { duration: 30, tick_interval: 1 },
             service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
             producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
-            client: { max_retries: 3 },
+            client: { ...DEFAULT_CLIENT, max_retries: 3 },
             broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0, request_timeout_ms: 2000 },
         });
         const result = await svc.run(config);
@@ -757,7 +757,7 @@ describe('SimulationService — retry storms', () => {
             simulation: { duration: 20, tick_interval: 1 },
             service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
             producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 200 } } },
-            client: { max_retries: 1 },
+            client: { ...DEFAULT_CLIENT, max_retries: 1 },
         });
         const result = await svc.run(config);
         // With max_retries=1, retry traffic should be bounded (not growing without limit)
@@ -767,6 +767,24 @@ describe('SimulationService — retry storms', () => {
         // Retries should exist but not exceed fresh traffic (bounded by 1 attempt)
         assert.ok(maxRetry > 0, 'should have retry traffic');
         assert.ok(maxRetry <= 200, 'retry traffic should be bounded by fresh traffic rate');
+    });
+    it('retry_delay defers retries by the configured number of seconds', async () => {
+        // Traffic 200 RPS, capacity 100 RPS, retry_delay 5s
+        // First drops at tick 0, retries should not appear until tick 5
+        const config = makeConfig({
+            simulation: { duration: 15, tick_interval: 1 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 200 } } },
+            client: { max_retries: 3, retry_delay: 5 },
+        });
+        const result = await svc.run(config);
+        // First few ticks should have no retry traffic (delay hasn't elapsed)
+        for (let i = 0; i < 5; i++) {
+            assert.equal(result.snapshots[i].retry_requests, 0, `t=${result.snapshots[i].time}: no retries before delay elapses`);
+        }
+        // After delay, retries should appear
+        const laterRetries = result.snapshots.slice(5).filter(s => s.retry_requests > 0);
+        assert.ok(laterRetries.length > 0, 'retries should appear after delay');
     });
 });
 describe('SimulationService — saturation new snapshot fields', () => {

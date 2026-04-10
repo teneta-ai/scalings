@@ -20,6 +20,7 @@ export const DEFAULT_PRODUCER = {
 };
 export const DEFAULT_CLIENT = {
     max_retries: 0,
+    retry_delay: 0,
 };
 export const DEFAULT_BROKER = {
     enabled: false,
@@ -222,6 +223,7 @@ export const PRESET_SCENARIOS = [
             },
             client: {
                 max_retries: 3,
+                retry_delay: 2,
             },
             broker: {
                 enabled: true,

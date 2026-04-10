@@ -177,6 +177,7 @@ describe('ConfigService — YAML round-trip', () => {
       },
       client: {
         max_retries: 3,
+        retry_delay: 2,
       },
     });
     const yaml = svc.export(config);
@@ -187,6 +188,7 @@ describe('ConfigService — YAML round-trip', () => {
     assert.equal(imported.service.saturation_threshold, 85);
     assert.equal(imported.service.max_capacity_reduction, 0.4);
     assert.equal(imported.client.max_retries, 3);
+    assert.equal(imported.client.retry_delay, 2);
   });
 
   it('preserves chaos config with failure events', () => {

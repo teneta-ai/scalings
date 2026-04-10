@@ -62,10 +62,9 @@ export class LocalSimulationService implements SimulationService {
 
     // Queue state
     let queuedRequests = 0;
-    // Retry cohorts: pendingRetries[k] = requests pending at attempt k+1
-    const pendingRetries: number[] = client.max_retries > 0
-      ? new Array(client.max_retries).fill(0)
-      : [];
+    // Retry queue: deferred batches with per-attempt counts
+    const retryQueue: { tick: number, counts: number[] }[] = [];
+    const retryDelayTicks = Math.max(1, Math.ceil((client.retry_delay || 0) / simulation.tick_interval));
 
     // Utilization history for delayed observation
     const utilizationHistory: number[] = [];
@@ -147,10 +146,19 @@ export class LocalSimulationService implements SimulationService {
         logEntries.push(`${finishedShutdown} pod${finishedShutdown > 1 ? 's' : ''} completed graceful shutdown and terminated`);
       }
 
-      // --- Inject retry traffic from previous tick ---
+      // --- Inject retry traffic that is ready ---
+      const readyByAttempt = new Array(client.max_retries).fill(0);
       let retryTraffic = 0;
-      for (let k = 0; k < pendingRetries.length; k++) {
-        retryTraffic += pendingRetries[k];
+      for (let i = retryQueue.length - 1; i >= 0; i--) {
+        if (retryQueue[i].tick <= tick) {
+          for (let k = 0; k < client.max_retries; k++) {
+            readyByAttempt[k] += retryQueue[i].counts[k];
+          }
+          retryQueue.splice(i, 1);
+        }
+      }
+      for (let k = 0; k < readyByAttempt.length; k++) {
+        retryTraffic += readyByAttempt[k];
       }
       const effectiveTraffic = currentTraffic + retryTraffic;
 
@@ -269,7 +277,7 @@ export class LocalSimulationService implements SimulationService {
         ? (queuedRequests / capacity) * 1000
         : 0;
 
-      // --- Schedule retries for next tick ---
+      // --- Schedule retries ---
       if (client.max_retries > 0 && effectiveTraffic > 0) {
         const failedTotal = dropped + expired;
         const failRatio = effectiveTraffic > 0 ? failedTotal / effectiveTraffic : 0;
@@ -279,17 +287,16 @@ export class LocalSimulationService implements SimulationService {
         const freshFailed = Math.round(currentTraffic * failRatio);
         const nextRetries = new Array(client.max_retries).fill(0);
         nextRetries[0] = freshFailed; // fresh failures become attempt 1
-        for (let k = 0; k < pendingRetries.length - 1; k++) {
-          nextRetries[k + 1] += Math.round(pendingRetries[k] * failRatio); // promote to next attempt
+        for (let k = 0; k < readyByAttempt.length - 1; k++) {
+          nextRetries[k + 1] += Math.round(readyByAttempt[k] * failRatio); // promote to next attempt
         }
-        // pendingRetries[max_retries - 1] failures are permanently dropped (max reached)
+        // readyByAttempt[max_retries - 1] failures are permanently dropped (max reached)
 
         const totalScheduled = nextRetries.reduce((a, b) => a + b, 0);
-        for (let k = 0; k < pendingRetries.length; k++) {
-          pendingRetries[k] = nextRetries[k];
-        }
         if (totalScheduled > 0) {
-          logEntries.push(`${totalScheduled} requests will retry next tick (max ${client.max_retries} attempts)`);
+          retryQueue.push({ tick: tick + retryDelayTicks, counts: nextRetries });
+          const delaySec = retryDelayTicks * simulation.tick_interval;
+          logEntries.push(`${totalScheduled} requests will retry in ${delaySec}s (max ${client.max_retries} attempts)`);
         }
       }
 

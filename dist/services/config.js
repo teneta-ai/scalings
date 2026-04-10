@@ -90,6 +90,7 @@ export class LocalConfigService {
         const d = DEFAULT_CONFIG.client;
         return {
             max_retries: this.num(obj.max_retries, d.max_retries),
+            retry_delay: this.num(obj.retry_delay, d.retry_delay),
         };
     }
     validateBroker(obj) {
@@ -179,6 +180,7 @@ export class LocalConfigService {
         lines.push('');
         lines.push('client:');
         lines.push(`  max_retries: ${config.client.max_retries}`);
+        lines.push(`  retry_delay: ${config.client.retry_delay}`);
         lines.push('');
         lines.push('broker:');
         lines.push(`  enabled: ${config.broker.enabled}`);
