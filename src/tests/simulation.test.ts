@@ -7,6 +7,7 @@ import {
   DEFAULT_SCALING,
   DEFAULT_ADVANCED,
   DEFAULT_CHAOS,
+  DEFAULT_QUEUE,
   DEFAULT_SIMULATION,
   SteadyParams,
   SpikeParams,
@@ -575,5 +576,177 @@ describe('SimulationService — log entries', () => {
     const result = await svc.run(config);
     const cooldownLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('cooldown active'));
     assert.ok(cooldownLogs.length > 0, 'should log cooldown blocking');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Queue mode — shared queue buffering
+// ---------------------------------------------------------------------------
+describe('SimulationService — queue mode (unlimited)', () => {
+  it('never drops requests with unlimited queue', async () => {
+    const config = makeConfig({
+      simulation: { duration: 60, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams },
+      queue: { enabled: true, max_size: 0 },
+    });
+    const result = await svc.run(config);
+    assert.equal(result.summary.total_dropped, 0, 'unlimited queue should never drop');
+    assert.equal(result.summary.drop_rate_percent, 0);
+  });
+
+  it('builds up queue depth when traffic exceeds capacity', async () => {
+    const config = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams },
+      queue: { enabled: true, max_size: 0 },
+    });
+    const result = await svc.run(config);
+    assert.ok(result.summary.peak_queue_depth > 0, 'queue should accumulate backlog');
+    // Queue should grow over time with constant overflow
+    const midDepth = result.snapshots[15].queue_depth;
+    const endDepth = result.snapshots[29].queue_depth;
+    assert.ok(endDepth > midDepth, `queue should grow: mid=${midDepth}, end=${endDepth}`);
+  });
+
+  it('drains queue when capacity exceeds traffic', async () => {
+    const config = makeConfig({
+      simulation: { duration: 120, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 20, capacity_per_replica: 100, startup_time: 1, scale_up_step: 5 },
+      advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+      traffic: {
+        pattern: 'spike',
+        params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 } as SpikeParams,
+      },
+      queue: { enabled: true, max_size: 0 },
+    });
+    const result = await svc.run(config);
+    // Queue should build during spike then drain after
+    assert.ok(result.summary.peak_queue_depth > 0, 'queue should build during spike');
+    const lastSnapshot = result.snapshots[result.snapshots.length - 1];
+    assert.ok(
+      lastSnapshot.queue_depth < result.summary.peak_queue_depth,
+      `queue should drain: last=${lastSnapshot.queue_depth}, peak=${result.summary.peak_queue_depth}`
+    );
+  });
+
+  it('tracks peak_queue_depth in summary', async () => {
+    const config = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 300 } as SteadyParams },
+      queue: { enabled: true, max_size: 0 },
+    });
+    const result = await svc.run(config);
+    const maxFromSnapshots = Math.max(...result.snapshots.map(s => s.queue_depth));
+    assert.equal(result.summary.peak_queue_depth, maxFromSnapshots);
+  });
+});
+
+describe('SimulationService — queue mode (bounded)', () => {
+  it('drops requests when queue is full', async () => {
+    const config = makeConfig({
+      simulation: { duration: 60, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams },
+      queue: { enabled: true, max_size: 200 },
+    });
+    const result = await svc.run(config);
+    assert.ok(result.summary.total_dropped > 0, 'bounded queue should eventually drop');
+    assert.ok(result.summary.peak_queue_depth <= 200, `queue should not exceed max_size: peak=${result.summary.peak_queue_depth}`);
+  });
+
+  it('queue depth never exceeds max_size', async () => {
+    const config = makeConfig({
+      simulation: { duration: 60, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 1000 } as SteadyParams },
+      queue: { enabled: true, max_size: 500 },
+    });
+    const result = await svc.run(config);
+    for (const snap of result.snapshots) {
+      assert.ok(snap.queue_depth <= 500, `t=${snap.time}: queue_depth ${snap.queue_depth} exceeds max_size 500`);
+    }
+  });
+
+  it('drops less than OLTP mode with same traffic', async () => {
+    const baseConfig = makeConfig({
+      simulation: { duration: 60, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 1, scale_up_step: 2 },
+      advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+      traffic: {
+        pattern: 'spike',
+        params: { base_rps: 50, spike_rps: 800, spike_start: 5, spike_duration: 15 } as SpikeParams,
+      },
+    });
+
+    const oltpResult = await svc.run({ ...baseConfig, queue: { enabled: false, max_size: 0 } });
+    const queueResult = await svc.run({ ...baseConfig, queue: { enabled: true, max_size: 5000 } });
+
+    assert.ok(
+      queueResult.summary.total_dropped <= oltpResult.summary.total_dropped,
+      `queue dropped (${queueResult.summary.total_dropped}) should be <= OLTP dropped (${oltpResult.summary.total_dropped})`
+    );
+  });
+});
+
+describe('SimulationService — queue disabled', () => {
+  it('queue_depth is always 0 when queue is disabled', async () => {
+    const config = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams },
+      queue: { enabled: false, max_size: 1000 },
+    });
+    const result = await svc.run(config);
+    for (const snap of result.snapshots) {
+      assert.equal(snap.queue_depth, 0, `t=${snap.time}: queue_depth should be 0 when disabled`);
+    }
+    assert.equal(result.summary.peak_queue_depth, 0);
+  });
+
+  it('served + dropped equals traffic when queue is disabled', async () => {
+    const config = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams },
+      queue: { enabled: false, max_size: 0 },
+    });
+    const result = await svc.run(config);
+    for (const snap of result.snapshots) {
+      const total = snap.served_requests + snap.dropped_requests;
+      assert.ok(
+        Math.abs(total - snap.traffic_rps) < 0.01,
+        `t=${snap.time}: served(${snap.served_requests}) + dropped(${snap.dropped_requests}) should equal traffic(${snap.traffic_rps})`
+      );
+    }
+  });
+});
+
+describe('SimulationService — queue log entries', () => {
+  it('logs queue depth when buffering', async () => {
+    const config = makeConfig({
+      simulation: { duration: 10, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams },
+      queue: { enabled: true, max_size: 0 },
+    });
+    const result = await svc.run(config);
+    const queueLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('Queue depth'));
+    assert.ok(queueLogs.length > 0, 'should log queue depth when buffering');
+    assert.ok(queueLogs[0].includes('buffered'), 'queue log should mention buffered requests');
+  });
+
+  it('logs queue full when bounded queue overflows', async () => {
+    const config = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      traffic: { pattern: 'steady', params: { rps: 1000 } as SteadyParams },
+      queue: { enabled: true, max_size: 100 },
+    });
+    const result = await svc.run(config);
+    const fullLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('Queue full'));
+    assert.ok(fullLogs.length > 0, 'should log when queue is full and dropping');
   });
 });

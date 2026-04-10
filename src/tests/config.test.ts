@@ -111,6 +111,36 @@ describe('ConfigService — YAML round-trip', () => {
     assert.deepStrictEqual(imported.advanced, config.advanced);
   });
 
+  it('preserves queue config', () => {
+    const config = makeConfig({
+      queue: { enabled: true, max_size: 5000 },
+    });
+    const yaml = svc.export(config);
+    const imported = svc.import(yaml);
+    assert.equal(imported.queue.enabled, true);
+    assert.equal(imported.queue.max_size, 5000);
+  });
+
+  it('preserves queue config with unlimited size', () => {
+    const config = makeConfig({
+      queue: { enabled: true, max_size: 0 },
+    });
+    const yaml = svc.export(config);
+    const imported = svc.import(yaml);
+    assert.equal(imported.queue.enabled, true);
+    assert.equal(imported.queue.max_size, 0);
+  });
+
+  it('preserves queue disabled state', () => {
+    const config = makeConfig({
+      queue: { enabled: false, max_size: 1000 },
+    });
+    const yaml = svc.export(config);
+    const imported = svc.import(yaml);
+    assert.equal(imported.queue.enabled, false);
+    assert.equal(imported.queue.max_size, 1000);
+  });
+
   it('preserves chaos config with failure events', () => {
     const config = makeConfig({
       chaos: {
@@ -154,6 +184,7 @@ describe('ConfigService — YAML export format', () => {
     assert.ok(yaml.includes('scaling:'));
     assert.ok(yaml.includes('advanced:'));
     assert.ok(yaml.includes('chaos:'));
+    assert.ok(yaml.includes('queue:'));
     assert.ok(yaml.includes('traffic:'));
   });
 });
@@ -203,6 +234,12 @@ describe('ConfigService — import validation', () => {
   it('falls back to defaults for invalid platform', () => {
     const config = svc.import('version: 1\nname: "test"\nplatform: invalid-platform');
     assert.equal(config.platform, DEFAULT_CONFIG.platform);
+  });
+
+  it('falls back to defaults for missing queue config', () => {
+    const config = svc.import('version: 1\nname: "no queue"');
+    assert.equal(config.queue.enabled, DEFAULT_CONFIG.queue.enabled);
+    assert.equal(config.queue.max_size, DEFAULT_CONFIG.queue.max_size);
   });
 
   it('falls back to defaults for missing numeric values', () => {
