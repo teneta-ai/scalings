@@ -58,20 +58,14 @@ export class LocalConfigService {
         if (obj.simulation && typeof obj.simulation === 'object') {
             config.simulation = this.validateSimulation(obj.simulation);
         }
-        if (obj.scaling && typeof obj.scaling === 'object') {
-            config.scaling = this.validateScaling(obj.scaling);
+        if (obj.producer && typeof obj.producer === 'object') {
+            config.producer = this.validateProducer(obj.producer);
         }
-        if (obj.advanced && typeof obj.advanced === 'object') {
-            config.advanced = this.validateAdvanced(obj.advanced);
+        if (obj.broker && typeof obj.broker === 'object') {
+            config.broker = this.validateBroker(obj.broker);
         }
-        if (obj.chaos && typeof obj.chaos === 'object') {
-            config.chaos = this.validateChaos(obj.chaos);
-        }
-        if (obj.traffic && typeof obj.traffic === 'object') {
-            config.traffic = this.validateTraffic(obj.traffic);
-        }
-        if (obj.queue && typeof obj.queue === 'object') {
-            config.queue = this.validateQueue(obj.queue);
+        if (obj.service && typeof obj.service === 'object') {
+            config.service = this.validateService(obj.service);
         }
         return config;
     }
@@ -81,34 +75,25 @@ export class LocalConfigService {
             tick_interval: this.num(obj.tick_interval, DEFAULT_CONFIG.simulation.tick_interval),
         };
     }
-    validateScaling(obj) {
-        const d = DEFAULT_CONFIG.scaling;
+    validateProducer(obj) {
+        const d = DEFAULT_CONFIG.producer;
         return {
-            min_replicas: this.num(obj.min_replicas, d.min_replicas),
-            max_replicas: this.num(obj.max_replicas, d.max_replicas),
-            scale_up_threshold: this.num(obj.scale_up_threshold, d.scale_up_threshold),
-            scale_down_threshold: this.num(obj.scale_down_threshold, d.scale_down_threshold),
-            capacity_per_replica: this.num(obj.capacity_per_replica, d.capacity_per_replica),
-            startup_time: this.num(obj.startup_time, d.startup_time),
-            scale_up_step: this.num(obj.scale_up_step, d.scale_up_step),
-            scale_down_step: this.num(obj.scale_down_step, d.scale_down_step),
+            retry_rate: this.num(obj.retry_rate, d.retry_rate),
+            traffic: (obj.traffic && typeof obj.traffic === 'object')
+                ? this.validateTraffic(obj.traffic)
+                : d.traffic,
         };
     }
-    validateAdvanced(obj) {
-        const d = DEFAULT_CONFIG.advanced;
+    validateBroker(obj) {
+        const d = DEFAULT_CONFIG.broker;
         return {
-            metric_observation_delay: this.num(obj.metric_observation_delay, d.metric_observation_delay),
-            cooldown_scale_up: this.num(obj.cooldown_scale_up, d.cooldown_scale_up),
-            cooldown_scale_down: this.num(obj.cooldown_scale_down, d.cooldown_scale_down),
-            node_provisioning_time: this.num(obj.node_provisioning_time, d.node_provisioning_time),
-            cluster_node_capacity: this.num(obj.cluster_node_capacity, d.cluster_node_capacity),
-            pods_per_node: this.num(obj.pods_per_node, d.pods_per_node),
-            graceful_shutdown_time: this.num(obj.graceful_shutdown_time, d.graceful_shutdown_time),
-            cost_per_replica_hour: this.num(obj.cost_per_replica_hour, d.cost_per_replica_hour),
+            enabled: typeof obj.enabled === 'boolean' ? obj.enabled : d.enabled,
+            max_size: this.num(obj.max_size, d.max_size),
+            request_timeout_ms: this.num(obj.request_timeout_ms, d.request_timeout_ms),
         };
     }
-    validateChaos(obj) {
-        const d = DEFAULT_CONFIG.chaos;
+    validateService(obj) {
+        const d = DEFAULT_CONFIG.service;
         const events = [];
         if (Array.isArray(obj.failure_events)) {
             for (const item of obj.failure_events) {
@@ -122,6 +107,28 @@ export class LocalConfigService {
             }
         }
         return {
+            // Basic scaling
+            min_replicas: this.num(obj.min_replicas, d.min_replicas),
+            max_replicas: this.num(obj.max_replicas, d.max_replicas),
+            scale_up_threshold: this.num(obj.scale_up_threshold, d.scale_up_threshold),
+            scale_down_threshold: this.num(obj.scale_down_threshold, d.scale_down_threshold),
+            capacity_per_replica: this.num(obj.capacity_per_replica, d.capacity_per_replica),
+            startup_time: this.num(obj.startup_time, d.startup_time),
+            scale_up_step: this.num(obj.scale_up_step, d.scale_up_step),
+            scale_down_step: this.num(obj.scale_down_step, d.scale_down_step),
+            // Advanced
+            metric_observation_delay: this.num(obj.metric_observation_delay, d.metric_observation_delay),
+            cooldown_scale_up: this.num(obj.cooldown_scale_up, d.cooldown_scale_up),
+            cooldown_scale_down: this.num(obj.cooldown_scale_down, d.cooldown_scale_down),
+            node_provisioning_time: this.num(obj.node_provisioning_time, d.node_provisioning_time),
+            cluster_node_capacity: this.num(obj.cluster_node_capacity, d.cluster_node_capacity),
+            pods_per_node: this.num(obj.pods_per_node, d.pods_per_node),
+            graceful_shutdown_time: this.num(obj.graceful_shutdown_time, d.graceful_shutdown_time),
+            cost_per_replica_hour: this.num(obj.cost_per_replica_hour, d.cost_per_replica_hour),
+            // Backpressure
+            backpressure_threshold: this.num(obj.backpressure_threshold, d.backpressure_threshold),
+            max_capacity_reduction: this.num(obj.max_capacity_reduction, d.max_capacity_reduction),
+            // Chaos
             pod_failure_rate: this.num(obj.pod_failure_rate, d.pod_failure_rate),
             random_seed: this.num(obj.random_seed, d.random_seed),
             failure_events: events,
@@ -131,21 +138,10 @@ export class LocalConfigService {
         const validPatterns = ['steady', 'gradual', 'spike', 'wave', 'step', 'custom'];
         const pattern = validPatterns.includes(obj.pattern)
             ? obj.pattern
-            : DEFAULT_CONFIG.traffic.pattern;
+            : DEFAULT_CONFIG.producer.traffic.pattern;
         return {
             pattern,
-            params: (obj.params && typeof obj.params === 'object') ? obj.params : DEFAULT_CONFIG.traffic.params,
-        };
-    }
-    validateQueue(obj) {
-        const d = DEFAULT_CONFIG.queue;
-        return {
-            enabled: typeof obj.enabled === 'boolean' ? obj.enabled : d.enabled,
-            max_size: this.num(obj.max_size, d.max_size),
-            backpressure_threshold: this.num(obj.backpressure_threshold, d.backpressure_threshold),
-            max_capacity_reduction: this.num(obj.max_capacity_reduction, d.max_capacity_reduction),
-            request_timeout_ms: this.num(obj.request_timeout_ms, d.request_timeout_ms),
-            retry_rate: this.num(obj.retry_rate, d.retry_rate),
+            params: (obj.params && typeof obj.params === 'object') ? obj.params : DEFAULT_CONFIG.producer.traffic.params,
         };
     }
     num(val, fallback) {
@@ -154,7 +150,7 @@ export class LocalConfigService {
     // --- Simple YAML serializer (no external dependencies) ---
     toYAML(config) {
         const lines = [
-            '# scalings.xyz simulator config v1',
+            '# scalings.xyz simulator config v2',
             `version: ${config.version}`,
             `name: "${this.escapeYAMLString(config.name)}"`,
         ];
@@ -167,51 +163,48 @@ export class LocalConfigService {
         lines.push(`  duration: ${config.simulation.duration}`);
         lines.push(`  tick_interval: ${config.simulation.tick_interval}`);
         lines.push('');
-        lines.push('scaling:');
-        lines.push(`  min_replicas: ${config.scaling.min_replicas}`);
-        lines.push(`  max_replicas: ${config.scaling.max_replicas}`);
-        lines.push(`  scale_up_threshold: ${config.scaling.scale_up_threshold}`);
-        lines.push(`  scale_down_threshold: ${config.scaling.scale_down_threshold}`);
-        lines.push(`  capacity_per_replica: ${config.scaling.capacity_per_replica}`);
-        lines.push(`  startup_time: ${config.scaling.startup_time}`);
-        lines.push(`  scale_up_step: ${config.scaling.scale_up_step}`);
-        lines.push(`  scale_down_step: ${config.scaling.scale_down_step}`);
+        lines.push('producer:');
+        lines.push(`  retry_rate: ${config.producer.retry_rate}`);
+        lines.push('  traffic:');
+        lines.push(`    pattern: ${config.producer.traffic.pattern}`);
+        lines.push('    params:');
+        this.serializeTrafficParams(config.producer.traffic, lines);
         lines.push('');
-        lines.push('advanced:');
-        lines.push(`  metric_observation_delay: ${config.advanced.metric_observation_delay}`);
-        lines.push(`  cooldown_scale_up: ${config.advanced.cooldown_scale_up}`);
-        lines.push(`  cooldown_scale_down: ${config.advanced.cooldown_scale_down}`);
-        lines.push(`  node_provisioning_time: ${config.advanced.node_provisioning_time}`);
-        lines.push(`  cluster_node_capacity: ${config.advanced.cluster_node_capacity}`);
-        lines.push(`  pods_per_node: ${config.advanced.pods_per_node}`);
-        lines.push(`  graceful_shutdown_time: ${config.advanced.graceful_shutdown_time}`);
-        lines.push(`  cost_per_replica_hour: ${config.advanced.cost_per_replica_hour}`);
+        lines.push('broker:');
+        lines.push(`  enabled: ${config.broker.enabled}`);
+        lines.push(`  max_size: ${config.broker.max_size}`);
+        lines.push(`  request_timeout_ms: ${config.broker.request_timeout_ms}`);
         lines.push('');
-        lines.push('chaos:');
-        lines.push(`  pod_failure_rate: ${config.chaos.pod_failure_rate}`);
-        lines.push(`  random_seed: ${config.chaos.random_seed}`);
-        if (config.chaos.failure_events.length > 0) {
+        lines.push('service:');
+        lines.push(`  min_replicas: ${config.service.min_replicas}`);
+        lines.push(`  max_replicas: ${config.service.max_replicas}`);
+        lines.push(`  scale_up_threshold: ${config.service.scale_up_threshold}`);
+        lines.push(`  scale_down_threshold: ${config.service.scale_down_threshold}`);
+        lines.push(`  capacity_per_replica: ${config.service.capacity_per_replica}`);
+        lines.push(`  startup_time: ${config.service.startup_time}`);
+        lines.push(`  scale_up_step: ${config.service.scale_up_step}`);
+        lines.push(`  scale_down_step: ${config.service.scale_down_step}`);
+        lines.push(`  metric_observation_delay: ${config.service.metric_observation_delay}`);
+        lines.push(`  cooldown_scale_up: ${config.service.cooldown_scale_up}`);
+        lines.push(`  cooldown_scale_down: ${config.service.cooldown_scale_down}`);
+        lines.push(`  node_provisioning_time: ${config.service.node_provisioning_time}`);
+        lines.push(`  cluster_node_capacity: ${config.service.cluster_node_capacity}`);
+        lines.push(`  pods_per_node: ${config.service.pods_per_node}`);
+        lines.push(`  graceful_shutdown_time: ${config.service.graceful_shutdown_time}`);
+        lines.push(`  cost_per_replica_hour: ${config.service.cost_per_replica_hour}`);
+        lines.push(`  backpressure_threshold: ${config.service.backpressure_threshold}`);
+        lines.push(`  max_capacity_reduction: ${config.service.max_capacity_reduction}`);
+        lines.push(`  pod_failure_rate: ${config.service.pod_failure_rate}`);
+        lines.push(`  random_seed: ${config.service.random_seed}`);
+        if (config.service.failure_events.length > 0) {
             lines.push('  failure_events:');
-            for (const evt of config.chaos.failure_events) {
+            for (const evt of config.service.failure_events) {
                 lines.push(`    - { time: ${evt.time}, count: ${evt.count} }`);
             }
         }
         else {
             lines.push('  failure_events: []');
         }
-        lines.push('');
-        lines.push('queue:');
-        lines.push(`  enabled: ${config.queue.enabled}`);
-        lines.push(`  max_size: ${config.queue.max_size}`);
-        lines.push(`  backpressure_threshold: ${config.queue.backpressure_threshold}`);
-        lines.push(`  max_capacity_reduction: ${config.queue.max_capacity_reduction}`);
-        lines.push(`  request_timeout_ms: ${config.queue.request_timeout_ms}`);
-        lines.push(`  retry_rate: ${config.queue.retry_rate}`);
-        lines.push('');
-        lines.push('traffic:');
-        lines.push(`  pattern: ${config.traffic.pattern}`);
-        lines.push('  params:');
-        this.serializeTrafficParams(config.traffic, lines);
         return lines.join('\n') + '\n';
     }
     serializeTrafficParams(traffic, lines) {
@@ -219,44 +212,44 @@ export class LocalConfigService {
         switch (traffic.pattern) {
             case 'steady': {
                 const p = params;
-                lines.push(`    rps: ${p.rps}`);
+                lines.push(`      rps: ${p.rps}`);
                 break;
             }
             case 'gradual': {
                 const p = params;
-                lines.push(`    start_rps: ${p.start_rps}`);
-                lines.push(`    end_rps: ${p.end_rps}`);
+                lines.push(`      start_rps: ${p.start_rps}`);
+                lines.push(`      end_rps: ${p.end_rps}`);
                 break;
             }
             case 'spike': {
                 const p = params;
-                lines.push(`    base_rps: ${p.base_rps}`);
-                lines.push(`    spike_rps: ${p.spike_rps}`);
-                lines.push(`    spike_start: ${p.spike_start}`);
-                lines.push(`    spike_duration: ${p.spike_duration}`);
+                lines.push(`      base_rps: ${p.base_rps}`);
+                lines.push(`      spike_rps: ${p.spike_rps}`);
+                lines.push(`      spike_start: ${p.spike_start}`);
+                lines.push(`      spike_duration: ${p.spike_duration}`);
                 break;
             }
             case 'wave': {
                 const p = params;
-                lines.push(`    base_rps: ${p.base_rps}`);
-                lines.push(`    amplitude: ${p.amplitude}`);
-                lines.push(`    period: ${p.period}`);
+                lines.push(`      base_rps: ${p.base_rps}`);
+                lines.push(`      amplitude: ${p.amplitude}`);
+                lines.push(`      period: ${p.period}`);
                 break;
             }
             case 'step': {
                 const p = params;
-                lines.push('    steps:');
+                lines.push('      steps:');
                 for (const step of p.steps) {
-                    lines.push(`      - rps: ${step.rps}`);
-                    lines.push(`        duration: ${step.duration}`);
+                    lines.push(`        - rps: ${step.rps}`);
+                    lines.push(`          duration: ${step.duration}`);
                 }
                 break;
             }
             case 'custom': {
                 const p = params;
-                lines.push('    series:');
+                lines.push('      series:');
                 for (const point of p.series) {
-                    lines.push(`      - { t: ${point.t}, rps: ${point.rps} }`);
+                    lines.push(`        - { t: ${point.t}, rps: ${point.rps} }`);
                 }
                 break;
             }

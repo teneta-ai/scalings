@@ -273,14 +273,14 @@ header {
   padding: 0.75rem var(--card-padding);
 }
 
-/* --- Queue Mode Toggle --- */
-.queue-toggle-row {
+/* --- Broker Mode Toggle --- */
+.broker-toggle-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.queue-mode-toggle {
+.broker-mode-toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -291,22 +291,22 @@ header {
   color: var(--text-primary);
 }
 
-.queue-mode-toggle input[type="checkbox"] {
+.broker-mode-toggle input[type="checkbox"] {
   accent-color: var(--cyan);
   width: 16px;
   height: 16px;
   cursor: pointer;
 }
 
-.queue-params {
+.broker-params {
   margin-top: 0.75rem;
 }
 
-.queue-params.hidden {
+.broker-params.hidden {
   display: none;
 }
 
-#queue-unlimited-btn.active {
+#broker-unlimited-btn.active {
   background: var(--cyan);
   color: var(--bg-primary);
   border-color: var(--cyan);

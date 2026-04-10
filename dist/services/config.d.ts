@@ -8,11 +8,10 @@ export declare class LocalConfigService implements ConfigService {
     loadLocal(): SimulationConfig | null;
     private validateConfig;
     private validateSimulation;
-    private validateScaling;
-    private validateAdvanced;
-    private validateChaos;
+    private validateProducer;
+    private validateBroker;
+    private validateService;
     private validateTraffic;
-    private validateQueue;
     private num;
     private toYAML;
     private serializeTrafficParams;

@@ -1,14 +1,15 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { LocalSimulationService } from '../services/simulation.js';
-import { DEFAULT_CONFIG, DEFAULT_SCALING, DEFAULT_ADVANCED, DEFAULT_CHAOS, DEFAULT_QUEUE, DEFAULT_SIMULATION, } from '../interfaces/types.js';
+import { DEFAULT_CONFIG, DEFAULT_SERVICE, DEFAULT_BROKER, DEFAULT_PRODUCER, DEFAULT_SIMULATION, } from '../interfaces/types.js';
 const svc = new LocalSimulationService();
+// Shorthand for service overrides — includes the "fast autoscaler" defaults
+const SVC = { ...DEFAULT_SERVICE, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 0 };
 function makeConfig(overrides = {}) {
     return {
         ...DEFAULT_CONFIG,
         simulation: { ...DEFAULT_SIMULATION, duration: 60, tick_interval: 1 },
-        scaling: { ...DEFAULT_SCALING },
-        advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 0 },
+        service: SVC,
         ...overrides,
     };
 }
@@ -24,7 +25,7 @@ describe('SimulationService — basic', () => {
     it('starts with min_replicas running pods', async () => {
         const config = makeConfig();
         const result = await svc.run(config);
-        assert.equal(result.snapshots[0].running_pods, DEFAULT_SCALING.min_replicas);
+        assert.equal(result.snapshots[0].running_pods, DEFAULT_SERVICE.min_replicas);
     });
     it('snapshot times are sequential', async () => {
         const config = makeConfig();
@@ -50,7 +51,7 @@ describe('SimulationService — basic', () => {
 describe('SimulationService — low traffic', () => {
     it('drops nothing when traffic is well within capacity', async () => {
         const config = makeConfig({
-            traffic: { pattern: 'steady', params: { rps: 50 } },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 50 } } },
         });
         const result = await svc.run(config);
         assert.equal(result.summary.total_dropped, 0);
@@ -58,8 +59,8 @@ describe('SimulationService — low traffic', () => {
     });
     it('does not scale up when utilization is below threshold', async () => {
         const config = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 5, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 100 } },
+            service: { ...SVC, min_replicas: 5, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 100 } } },
         });
         // 100 rps / (5 * 100) = 20% utilization — below 70% threshold
         const result = await svc.run(config);
@@ -73,9 +74,8 @@ describe('SimulationService — scale-up', () => {
     it('scales up when utilization exceeds threshold', async () => {
         const config = makeConfig({
             simulation: { duration: 120, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 2, capacity_per_replica: 100, startup_time: 1 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
+            service: { ...SVC, min_replicas: 2, capacity_per_replica: 100, startup_time: 1, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
         });
         // 500 rps / (2 * 100) = 250% → should trigger many scale-ups
         const result = await svc.run(config);
@@ -84,9 +84,8 @@ describe('SimulationService — scale-up', () => {
     it('respects max_replicas ceiling', async () => {
         const config = makeConfig({
             simulation: { duration: 300, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 2, max_replicas: 5, capacity_per_replica: 100, startup_time: 1 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 5000 } },
+            service: { ...SVC, min_replicas: 2, max_replicas: 5, capacity_per_replica: 100, startup_time: 1, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 5000 } } },
         });
         const result = await svc.run(config);
         assert.ok(result.summary.peak_pod_count <= 5, `peak was ${result.summary.peak_pod_count}`);
@@ -99,26 +98,11 @@ describe('SimulationService — scale-down', () => {
     it('scales down when utilization drops below threshold', async () => {
         const config = makeConfig({
             simulation: { duration: 200, tick_interval: 1 },
-            scaling: {
-                ...DEFAULT_SCALING,
-                min_replicas: 2,
-                max_replicas: 20,
-                capacity_per_replica: 100,
-                startup_time: 1,
-                scale_up_step: 5,
-            },
-            advanced: {
-                ...DEFAULT_ADVANCED,
-                metric_observation_delay: 0,
-                cooldown_scale_up: 0,
-                cooldown_scale_down: 5,
-                node_provisioning_time: 0,
-                graceful_shutdown_time: 1,
-            },
-            traffic: {
-                pattern: 'spike',
-                params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 },
-            },
+            service: { ...SVC, min_replicas: 2, max_replicas: 20, capacity_per_replica: 100, startup_time: 1, scale_up_step: 5, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 5, node_provisioning_time: 0, graceful_shutdown_time: 1 },
+            producer: { ...DEFAULT_PRODUCER, traffic: {
+                    pattern: 'spike',
+                    params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 },
+                } },
         });
         const result = await svc.run(config);
         // After spike, pods should scale back down
@@ -128,9 +112,8 @@ describe('SimulationService — scale-down', () => {
     it('respects min_replicas floor', async () => {
         const config = makeConfig({
             simulation: { duration: 200, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 3, capacity_per_replica: 1000, startup_time: 1 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 0, graceful_shutdown_time: 1 },
-            traffic: { pattern: 'steady', params: { rps: 10 } },
+            service: { ...SVC, min_replicas: 3, capacity_per_replica: 1000, startup_time: 1, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 0, graceful_shutdown_time: 1 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 10 } } },
         });
         const result = await svc.run(config);
         const lastSnapshot = result.snapshots[result.snapshots.length - 1];
@@ -144,26 +127,11 @@ describe('SimulationService — snapshot consistency', () => {
     it('pod state counts always sum to total_pods', async () => {
         const config = makeConfig({
             simulation: { duration: 200, tick_interval: 1 },
-            scaling: {
-                ...DEFAULT_SCALING,
-                min_replicas: 2,
-                max_replicas: 20,
-                capacity_per_replica: 100,
-                startup_time: 5,
-                scale_up_step: 4,
-            },
-            advanced: {
-                ...DEFAULT_ADVANCED,
-                metric_observation_delay: 0,
-                cooldown_scale_up: 0,
-                cooldown_scale_down: 5,
-                node_provisioning_time: 0,
-                graceful_shutdown_time: 10,
-            },
-            traffic: {
-                pattern: 'spike',
-                params: { base_rps: 50, spike_rps: 1500, spike_start: 10, spike_duration: 30 },
-            },
+            service: { ...SVC, min_replicas: 2, max_replicas: 20, capacity_per_replica: 100, startup_time: 5, scale_up_step: 4, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 5, node_provisioning_time: 0, graceful_shutdown_time: 10 },
+            producer: { ...DEFAULT_PRODUCER, traffic: {
+                    pattern: 'spike',
+                    params: { base_rps: 50, spike_rps: 1500, spike_start: 10, spike_duration: 30 },
+                } },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -174,26 +142,11 @@ describe('SimulationService — snapshot consistency', () => {
     it('scale-down event immediately reflects in running_pods', async () => {
         const config = makeConfig({
             simulation: { duration: 100, tick_interval: 1 },
-            scaling: {
-                ...DEFAULT_SCALING,
-                min_replicas: 2,
-                max_replicas: 10,
-                capacity_per_replica: 100,
-                startup_time: 1,
-                scale_up_step: 5,
-            },
-            advanced: {
-                ...DEFAULT_ADVANCED,
-                metric_observation_delay: 0,
-                cooldown_scale_up: 0,
-                cooldown_scale_down: 5,
-                node_provisioning_time: 0,
-                graceful_shutdown_time: 5,
-            },
-            traffic: {
-                pattern: 'spike',
-                params: { base_rps: 50, spike_rps: 1000, spike_start: 5, spike_duration: 10 },
-            },
+            service: { ...SVC, min_replicas: 2, max_replicas: 10, capacity_per_replica: 100, startup_time: 1, scale_up_step: 5, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 5, node_provisioning_time: 0, graceful_shutdown_time: 5 },
+            producer: { ...DEFAULT_PRODUCER, traffic: {
+                    pattern: 'spike',
+                    params: { base_rps: 50, spike_rps: 1000, spike_start: 5, spike_duration: 10 },
+                } },
         });
         const result = await svc.run(config);
         for (let i = 0; i < result.snapshots.length; i++) {
@@ -211,8 +164,8 @@ describe('SimulationService — snapshot consistency', () => {
 describe('SimulationService — dropped requests', () => {
     it('drops requests when traffic exceeds capacity', async () => {
         const config = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
         });
         const result = await svc.run(config);
         assert.ok(result.summary.total_dropped > 0);
@@ -220,8 +173,8 @@ describe('SimulationService — dropped requests', () => {
     });
     it('served + dropped equals total', async () => {
         const config = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
         });
         const result = await svc.run(config);
         const total = result.summary.total_served + result.summary.total_dropped;
@@ -235,9 +188,8 @@ describe('SimulationService — cooldown', () => {
     it('cooldown prevents rapid scale-up', async () => {
         const config = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 2, max_replicas: 50, capacity_per_replica: 100, startup_time: 1, scale_up_step: 1 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 20, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 5000 } },
+            service: { ...SVC, min_replicas: 2, max_replicas: 50, capacity_per_replica: 100, startup_time: 1, scale_up_step: 1, metric_observation_delay: 0, cooldown_scale_up: 20, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 5000 } } },
         });
         const result = await svc.run(config);
         // With 20s cooldown over 60s, can only scale up ~3 times (tick 0, 20, 40)
@@ -252,9 +204,8 @@ describe('SimulationService — startup time', () => {
     it('new pods do not serve traffic during startup', async () => {
         const config = makeConfig({
             simulation: { duration: 10, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 5 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 5, metric_observation_delay: 0, cooldown_scale_up: 0, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
         });
         const result = await svc.run(config);
         // At tick 0: 1 running pod, capacity 100. Scale-up triggered.
@@ -270,8 +221,8 @@ describe('SimulationService — startup time', () => {
 describe('SimulationService — cost', () => {
     it('cumulative cost increases over time', async () => {
         const config = makeConfig({
-            advanced: { ...DEFAULT_ADVANCED, cost_per_replica_hour: 1.0, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
-            traffic: { pattern: 'steady', params: { rps: 50 } },
+            service: { ...SVC, cost_per_replica_hour: 1.0, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 50 } } },
         });
         const result = await svc.run(config);
         const firstCost = result.snapshots[0].estimated_cost;
@@ -281,14 +232,12 @@ describe('SimulationService — cost', () => {
     });
     it('cost is proportional to pod count', async () => {
         const config1 = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 2 },
-            advanced: { ...DEFAULT_ADVANCED, cost_per_replica_hour: 1.0, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
-            traffic: { pattern: 'steady', params: { rps: 10 } },
+            service: { ...SVC, min_replicas: 2, cost_per_replica_hour: 1.0, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 10 } } },
         });
         const config5 = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 5 },
-            advanced: { ...DEFAULT_ADVANCED, cost_per_replica_hour: 1.0, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
-            traffic: { pattern: 'steady', params: { rps: 10 } },
+            service: { ...SVC, min_replicas: 5, cost_per_replica_hour: 1.0, metric_observation_delay: 0, cooldown_scale_up: 9999, cooldown_scale_down: 9999 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 10 } } },
         });
         const result1 = await svc.run(config1);
         const result5 = await svc.run(config5);
@@ -303,8 +252,8 @@ describe('SimulationService — cost', () => {
 describe('SimulationService — summary', () => {
     it('under-provisioned time is tracked correctly', async () => {
         const config = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
         });
         const result = await svc.run(config);
         // Always over capacity → 100% under-provisioned
@@ -312,8 +261,8 @@ describe('SimulationService — summary', () => {
     });
     it('zero drops when capacity is sufficient', async () => {
         const config = makeConfig({
-            scaling: { ...DEFAULT_SCALING, min_replicas: 10, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 100 } },
+            service: { ...SVC, min_replicas: 10, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 100 } } },
         });
         const result = await svc.run(config);
         assert.equal(result.summary.total_dropped, 0);
@@ -327,15 +276,8 @@ describe('SimulationService — seeded PRNG', () => {
     it('produces identical results with the same seed', async () => {
         const config = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 5, max_replicas: 20, capacity_per_replica: 100 },
-            advanced: {
-                ...DEFAULT_ADVANCED,
-                metric_observation_delay: 0,
-                cooldown_scale_up: 0,
-                cooldown_scale_down: 9999,
-            },
-            chaos: { ...DEFAULT_CHAOS, pod_failure_rate: 5, random_seed: 42 },
-            traffic: { pattern: 'steady', params: { rps: 300 } },
+            service: { ...SVC, min_replicas: 5, max_replicas: 20, capacity_per_replica: 100, pod_failure_rate: 5, random_seed: 42, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 300 } } },
         });
         const result1 = await svc.run(config);
         const result2 = await svc.run(config);
@@ -345,18 +287,11 @@ describe('SimulationService — seeded PRNG', () => {
     it('produces different results with different seeds', async () => {
         const baseConfig = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 5, max_replicas: 20, capacity_per_replica: 100 },
-            advanced: {
-                ...DEFAULT_ADVANCED,
-                metric_observation_delay: 0,
-                cooldown_scale_up: 0,
-                cooldown_scale_down: 9999,
-            },
-            chaos: { ...DEFAULT_CHAOS, pod_failure_rate: 10, random_seed: 1 },
-            traffic: { pattern: 'steady', params: { rps: 300 } },
+            service: { ...SVC, min_replicas: 5, max_replicas: 20, capacity_per_replica: 100, pod_failure_rate: 10, random_seed: 1, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 300 } } },
         });
         const result1 = await svc.run(baseConfig);
-        const result2 = await svc.run({ ...baseConfig, chaos: { ...baseConfig.chaos, random_seed: 999 } });
+        const result2 = await svc.run({ ...baseConfig, service: { ...baseConfig.service, random_seed: 999 } });
         // With a 10% failure rate over 60 ticks, different seeds should produce different pod counts
         const pods1 = result1.snapshots.map(s => s.running_pods);
         const pods2 = result2.snapshots.map(s => s.running_pods);
@@ -371,12 +306,8 @@ describe('SimulationService — failure events', () => {
     it('kills pods at the scheduled time', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 5, max_replicas: 5, capacity_per_replica: 100 },
-            chaos: {
-                ...DEFAULT_CHAOS,
-                failure_events: [{ time: 10, count: 3 }],
-            },
-            traffic: { pattern: 'steady', params: { rps: 100 } },
+            service: { ...SVC, min_replicas: 5, max_replicas: 5, capacity_per_replica: 100, failure_events: [{ time: 10, count: 3 }] },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 100 } } },
         });
         const result = await svc.run(config);
         // Before event: 5 running. At t=10: 3 killed → 2 running
@@ -386,12 +317,8 @@ describe('SimulationService — failure events', () => {
     it('does not kill more pods than are running', async () => {
         const config = makeConfig({
             simulation: { duration: 10, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 2, max_replicas: 2, capacity_per_replica: 100 },
-            chaos: {
-                ...DEFAULT_CHAOS,
-                failure_events: [{ time: 5, count: 10 }],
-            },
-            traffic: { pattern: 'steady', params: { rps: 50 } },
+            service: { ...SVC, min_replicas: 2, max_replicas: 2, capacity_per_replica: 100, failure_events: [{ time: 5, count: 10 }] },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 50 } } },
         });
         const result = await svc.run(config);
         const atEvent = result.snapshots[5];
@@ -412,9 +339,8 @@ describe('SimulationService — log entries', () => {
     it('logs scale-up events with utilization info', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 1 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 1, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
         });
         const result = await svc.run(config);
         const scaleUpLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.startsWith('Scaled up'));
@@ -425,26 +351,11 @@ describe('SimulationService — log entries', () => {
     it('logs scale-down events with utilization info', async () => {
         const config = makeConfig({
             simulation: { duration: 200, tick_interval: 1 },
-            scaling: {
-                ...DEFAULT_SCALING,
-                min_replicas: 2,
-                max_replicas: 20,
-                capacity_per_replica: 100,
-                startup_time: 1,
-                scale_up_step: 5,
-            },
-            advanced: {
-                ...DEFAULT_ADVANCED,
-                metric_observation_delay: 0,
-                cooldown_scale_up: 0,
-                cooldown_scale_down: 5,
-                node_provisioning_time: 0,
-                graceful_shutdown_time: 1,
-            },
-            traffic: {
-                pattern: 'spike',
-                params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 },
-            },
+            service: { ...SVC, min_replicas: 2, max_replicas: 20, capacity_per_replica: 100, startup_time: 1, scale_up_step: 5, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 5, node_provisioning_time: 0, graceful_shutdown_time: 1 },
+            producer: { ...DEFAULT_PRODUCER, traffic: {
+                    pattern: 'spike',
+                    params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 },
+                } },
         });
         const result = await svc.run(config);
         const scaleDownLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.startsWith('Scaled down'));
@@ -454,12 +365,8 @@ describe('SimulationService — log entries', () => {
     it('logs scheduled failure events', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 5, max_replicas: 5, capacity_per_replica: 100 },
-            chaos: {
-                ...DEFAULT_CHAOS,
-                failure_events: [{ time: 10, count: 3 }],
-            },
-            traffic: { pattern: 'steady', params: { rps: 100 } },
+            service: { ...SVC, min_replicas: 5, max_replicas: 5, capacity_per_replica: 100, failure_events: [{ time: 10, count: 3 }] },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 100 } } },
         });
         const result = await svc.run(config);
         const failureLogs = result.snapshots[10].log_entries.filter(l => l.includes('Scheduled failure'));
@@ -469,9 +376,8 @@ describe('SimulationService — log entries', () => {
     it('logs pod lifecycle transitions', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 5 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 5, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
         });
         const result = await svc.run(config);
         const readyLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('finished starting'));
@@ -480,19 +386,11 @@ describe('SimulationService — log entries', () => {
     it('logs drop start and recovery', async () => {
         const config = makeConfig({
             simulation: { duration: 120, tick_interval: 1 },
-            scaling: {
-                ...DEFAULT_SCALING,
-                min_replicas: 2,
-                max_replicas: 30,
-                capacity_per_replica: 100,
-                startup_time: 1,
-                scale_up_step: 10,
-            },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: {
-                pattern: 'spike',
-                params: { base_rps: 100, spike_rps: 2000, spike_start: 10, spike_duration: 20 },
-            },
+            service: { ...SVC, min_replicas: 2, max_replicas: 30, capacity_per_replica: 100, startup_time: 1, scale_up_step: 10, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: {
+                    pattern: 'spike',
+                    params: { base_rps: 100, spike_rps: 2000, spike_start: 10, spike_duration: 20 },
+                } },
         });
         const result = await svc.run(config);
         const allLogs = result.snapshots.flatMap(s => s.log_entries);
@@ -504,9 +402,8 @@ describe('SimulationService — log entries', () => {
     it('logs max replicas warning when at ceiling', async () => {
         const config = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 3, capacity_per_replica: 100, startup_time: 1 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 5000 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 3, capacity_per_replica: 100, startup_time: 1, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 5000 } } },
         });
         const result = await svc.run(config);
         const maxLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.startsWith('At max replicas'));
@@ -515,9 +412,8 @@ describe('SimulationService — log entries', () => {
     it('logs cooldown blocking scale-up', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 50, capacity_per_replica: 100, startup_time: 1, scale_up_step: 1 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 10, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: { pattern: 'steady', params: { rps: 5000 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 50, capacity_per_replica: 100, startup_time: 1, scale_up_step: 1, metric_observation_delay: 0, cooldown_scale_up: 10, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 5000 } } },
         });
         const result = await svc.run(config);
         const cooldownLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('cooldown active'));
@@ -531,9 +427,9 @@ describe('SimulationService — queue mode (unlimited)', () => {
     it('never drops requests with unlimited queue', async () => {
         const config = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         assert.equal(result.summary.total_dropped, 0, 'unlimited queue should never drop');
@@ -542,9 +438,9 @@ describe('SimulationService — queue mode (unlimited)', () => {
     it('builds up queue depth when traffic exceeds capacity', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         assert.ok(result.summary.peak_queue_depth > 0, 'queue should accumulate backlog');
@@ -556,13 +452,12 @@ describe('SimulationService — queue mode (unlimited)', () => {
     it('drains queue when capacity exceeds traffic', async () => {
         const config = makeConfig({
             simulation: { duration: 120, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 20, capacity_per_replica: 100, startup_time: 1, scale_up_step: 5 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: {
-                pattern: 'spike',
-                params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 },
-            },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 20, capacity_per_replica: 100, startup_time: 1, scale_up_step: 5, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: {
+                    pattern: 'spike',
+                    params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 },
+                } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         // Queue should build during spike then drain after
@@ -573,9 +468,9 @@ describe('SimulationService — queue mode (unlimited)', () => {
     it('tracks peak_queue_depth in summary', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 300 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 300 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         const maxFromSnapshots = Math.max(...result.snapshots.map(s => s.queue_depth));
@@ -586,9 +481,9 @@ describe('SimulationService — queue mode (bounded)', () => {
     it('drops requests when queue is full', async () => {
         const config = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 200 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 200 },
         });
         const result = await svc.run(config);
         assert.ok(result.summary.total_dropped > 0, 'bounded queue should eventually drop');
@@ -597,9 +492,9 @@ describe('SimulationService — queue mode (bounded)', () => {
     it('queue depth never exceeds max_size', async () => {
         const config = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 1000 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 500 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 1000 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 500 },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -609,15 +504,14 @@ describe('SimulationService — queue mode (bounded)', () => {
     it('drops less than OLTP mode with same traffic', async () => {
         const baseConfig = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 1, scale_up_step: 2 },
-            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
-            traffic: {
-                pattern: 'spike',
-                params: { base_rps: 50, spike_rps: 800, spike_start: 5, spike_duration: 15 },
-            },
+            service: { ...SVC, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 1, scale_up_step: 2, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: {
+                    pattern: 'spike',
+                    params: { base_rps: 50, spike_rps: 800, spike_start: 5, spike_duration: 15 },
+                } },
         });
-        const oltpResult = await svc.run({ ...baseConfig, queue: { ...DEFAULT_QUEUE, enabled: false, max_size: 0 } });
-        const queueResult = await svc.run({ ...baseConfig, queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 5000 } });
+        const oltpResult = await svc.run({ ...baseConfig, broker: { ...DEFAULT_BROKER, enabled: false, max_size: 0 } });
+        const queueResult = await svc.run({ ...baseConfig, broker: { ...DEFAULT_BROKER, enabled: true, max_size: 5000 } });
         assert.ok(queueResult.summary.total_dropped <= oltpResult.summary.total_dropped, `queue dropped (${queueResult.summary.total_dropped}) should be <= OLTP dropped (${oltpResult.summary.total_dropped})`);
     });
 });
@@ -625,9 +519,9 @@ describe('SimulationService — queue disabled', () => {
     it('queue_depth is always 0 when queue is disabled', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: false, max_size: 1000 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: false, max_size: 1000 },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -638,9 +532,9 @@ describe('SimulationService — queue disabled', () => {
     it('served + dropped equals traffic when queue is disabled', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: false, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: false, max_size: 0 },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -653,9 +547,9 @@ describe('SimulationService — queue log entries', () => {
     it('logs queue depth when buffering', async () => {
         const config = makeConfig({
             simulation: { duration: 10, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         const queueLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('Queue depth'));
@@ -665,13 +559,13 @@ describe('SimulationService — queue log entries', () => {
     it('logs queue full when bounded queue overflows', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 1000 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 100 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 1000 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 100 },
         });
         const result = await svc.run(config);
-        const fullLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('Queue full'));
-        assert.ok(fullLogs.length > 0, 'should log when queue is full and dropping');
+        const fullLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('Broker full'));
+        assert.ok(fullLogs.length > 0, 'should log when broker is full and dropping');
     });
 });
 // ---------------------------------------------------------------------------
@@ -681,9 +575,9 @@ describe('SimulationService — backpressure capacity degradation', () => {
     it('reduces effective capacity when queue exceeds backpressure threshold', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, backpressure_threshold: 100, max_capacity_reduction: 0.5 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100, backpressure_threshold: 100, max_capacity_reduction: 0.5 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         // Queue grows, so effective capacity should eventually drop below base capacity
@@ -696,9 +590,9 @@ describe('SimulationService — backpressure capacity degradation', () => {
     it('does not degrade capacity when queue is below threshold', async () => {
         const config = makeConfig({
             simulation: { duration: 10, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 120 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, backpressure_threshold: 10000, max_capacity_reduction: 0.5 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100, backpressure_threshold: 10000, max_capacity_reduction: 0.5 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 120 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         // Queue will grow slowly but stay well below 10000 threshold
@@ -709,9 +603,9 @@ describe('SimulationService — backpressure capacity degradation', () => {
     it('caps capacity reduction at max_capacity_reduction', async () => {
         const config = makeConfig({
             simulation: { duration: 60, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 1000 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, backpressure_threshold: 50, max_capacity_reduction: 0.3 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100, backpressure_threshold: 50, max_capacity_reduction: 0.3 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 1000 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         // Even with massive queue, effective capacity should never drop below 70% of base
@@ -722,9 +616,9 @@ describe('SimulationService — backpressure capacity degradation', () => {
     it('backpressure is disabled when threshold is 0', async () => {
         const config = makeConfig({
             simulation: { duration: 20, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, backpressure_threshold: 0, max_capacity_reduction: 0.5 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100, backpressure_threshold: 0, max_capacity_reduction: 0.5 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -736,9 +630,9 @@ describe('SimulationService — queue wait time', () => {
     it('calculates wait time proportional to queue depth', async () => {
         const config = makeConfig({
             simulation: { duration: 20, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         // Wait time should increase as queue grows
@@ -751,9 +645,9 @@ describe('SimulationService — queue wait time', () => {
     it('wait time is 0 when queue is empty', async () => {
         const config = makeConfig({
             simulation: { duration: 10, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 10, max_replicas: 10, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 50 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 10, max_replicas: 10, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 50 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -765,9 +659,9 @@ describe('SimulationService — request timeout/expiry', () => {
     it('expires requests that exceed the timeout', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, request_timeout_ms: 2000 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0, request_timeout_ms: 2000 },
         });
         const result = await svc.run(config);
         const totalExpired = result.snapshots.reduce((acc, s) => acc + s.expired_requests, 0);
@@ -777,14 +671,14 @@ describe('SimulationService — request timeout/expiry', () => {
     it('limits queue growth compared to no timeout', async () => {
         const baseConfig = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0 },
         });
         const noTimeout = await svc.run(baseConfig);
         const withTimeout = await svc.run({
             ...baseConfig,
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, request_timeout_ms: 2000 },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0, request_timeout_ms: 2000 },
         });
         // Timeout should significantly limit queue growth vs unbounded
         assert.ok(withTimeout.summary.peak_queue_depth < noTimeout.summary.peak_queue_depth, `timeout peak (${withTimeout.summary.peak_queue_depth}) should be less than no-timeout peak (${noTimeout.summary.peak_queue_depth})`);
@@ -797,9 +691,9 @@ describe('SimulationService — request timeout/expiry', () => {
     it('does not expire when timeout is 0 (disabled)', async () => {
         const config = makeConfig({
             simulation: { duration: 20, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, request_timeout_ms: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0, request_timeout_ms: 0 },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -811,9 +705,9 @@ describe('SimulationService — retry storms', () => {
     it('retries amplify traffic when enabled', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 200, retry_rate: 0.5 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, retry_rate: 0.5, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 200 },
         });
         const result = await svc.run(config);
         // Retry traffic should appear after the first drops
@@ -824,9 +718,9 @@ describe('SimulationService — retry storms', () => {
     it('no retries when retry_rate is 0', async () => {
         const config = makeConfig({
             simulation: { duration: 20, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 200, retry_rate: 0 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, retry_rate: 0, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 200 },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -836,9 +730,9 @@ describe('SimulationService — retry storms', () => {
     it('retries from expired requests trigger when both timeout and retry are configured', async () => {
         const config = makeConfig({
             simulation: { duration: 30, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 500 } },
-            queue: { ...DEFAULT_QUEUE, enabled: true, max_size: 0, request_timeout_ms: 2000, retry_rate: 0.3 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, retry_rate: 0.3, traffic: { pattern: 'steady', params: { rps: 500 } } },
+            broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0, request_timeout_ms: 2000 },
         });
         const result = await svc.run(config);
         // Both expiry and retries should be present
@@ -850,8 +744,8 @@ describe('SimulationService — backpressure new snapshot fields', () => {
     it('includes all new fields in snapshots with defaults', async () => {
         const config = makeConfig({
             simulation: { duration: 5, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 50 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 50 } } },
         });
         const result = await svc.run(config);
         for (const snap of result.snapshots) {
@@ -866,8 +760,8 @@ describe('SimulationService — backpressure new snapshot fields', () => {
     it('includes all new fields in summary with defaults', async () => {
         const config = makeConfig({
             simulation: { duration: 5, tick_interval: 1 },
-            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
-            traffic: { pattern: 'steady', params: { rps: 50 } },
+            service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 50 } } },
         });
         const result = await svc.run(config);
         assert.equal(typeof result.summary.avg_queue_wait_time_ms, 'number');

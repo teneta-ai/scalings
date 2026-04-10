@@ -17,17 +17,17 @@ export class LocalSimulationService {
         };
     }
     async run(config) {
-        const { simulation, scaling, advanced, chaos, traffic, queue } = config;
+        const { simulation, producer, broker, service } = config;
         const totalTicks = Math.ceil(simulation.duration / simulation.tick_interval);
         // Generate traffic pattern
-        const trafficData = this.trafficService.generate(traffic, simulation.duration, simulation.tick_interval);
+        const trafficData = this.trafficService.generate(producer.traffic, simulation.duration, simulation.tick_interval);
         // Set up random number generator (seeded or Math.random)
-        const rng = chaos.random_seed > 0
-            ? this.createRng(chaos.random_seed)
+        const rng = service.random_seed > 0
+            ? this.createRng(service.random_seed)
             : Math.random;
         // Pre-process scheduled failure events into a time-indexed map
         const failureEventMap = new Map();
-        for (const evt of chaos.failure_events) {
+        for (const evt of service.failure_events) {
             const existing = failureEventMap.get(evt.time) || 0;
             failureEventMap.set(evt.time, existing + evt.count);
         }
@@ -44,11 +44,11 @@ export class LocalSimulationService {
         // Utilization history for delayed observation
         const utilizationHistory = [];
         // Initialize with min replicas (already running)
-        for (let i = 0; i < scaling.min_replicas; i++) {
+        for (let i = 0; i < service.min_replicas; i++) {
             pods.push({ id: nextPodId++, state: 'running', stateTimer: 0, needsNodeProvisioning: false });
         }
         // Count total pods on existing nodes for node provisioning tracking
-        let totalPodsEverScheduled = scaling.min_replicas;
+        let totalPodsEverScheduled = service.min_replicas;
         // Track state transitions for logging
         let prevDropping = false;
         for (let tick = 0; tick < totalTicks; tick++) {
@@ -56,8 +56,8 @@ export class LocalSimulationService {
             const currentTraffic = trafficData[tick] || 0;
             const logEntries = [];
             // --- Random pod failures ---
-            if (chaos.pod_failure_rate > 0) {
-                const failureProbability = chaos.pod_failure_rate / 100;
+            if (service.pod_failure_rate > 0) {
+                const failureProbability = service.pod_failure_rate / 100;
                 let randomKillCount = 0;
                 pods = pods.filter(pod => {
                     if (pod.state === 'running' && rng() < failureProbability) {
@@ -123,15 +123,15 @@ export class LocalSimulationService {
             const shuttingDownPods = pods.filter(p => p.state === 'shutting_down');
             const startingPods = pods.filter(p => p.state === 'starting');
             const servingPods = runningPods.length + shuttingDownPods.length;
-            const baseCapacity = servingPods * scaling.capacity_per_replica;
+            const baseCapacity = servingPods * service.capacity_per_replica;
             // --- Backpressure: degrade capacity when queue is deep ---
-            const effectiveCapacity = this.applyBackpressure(baseCapacity, queuedRequests, queue);
+            const effectiveCapacity = this.applyBackpressure(baseCapacity, queuedRequests, broker.enabled, service);
             const capacity = effectiveCapacity;
             const utilization = capacity > 0 ? effectiveTraffic / capacity : (effectiveTraffic > 0 ? Infinity : 0);
             // Store utilization for delayed observation
             utilizationHistory.push(utilization);
             // Get delayed utilization
-            const delayTicks = Math.ceil(advanced.metric_observation_delay / simulation.tick_interval);
+            const delayTicks = Math.ceil(service.metric_observation_delay / simulation.tick_interval);
             const delayedIndex = Math.max(0, tick - delayTicks);
             const delayedUtilization = delayedIndex < utilizationHistory.length
                 ? utilizationHistory[delayedIndex]
@@ -140,79 +140,79 @@ export class LocalSimulationService {
             const allPodsCount = pods.length;
             let scaleEvent = null;
             // Scale up check
-            const scaleUpThresholdFraction = scaling.scale_up_threshold / 100;
+            const scaleUpThresholdFraction = service.scale_up_threshold / 100;
             if (delayedUtilization > scaleUpThresholdFraction
-                && (time - lastScaleUpTime) >= advanced.cooldown_scale_up
-                && allPodsCount < scaling.max_replicas) {
-                const podsToAdd = Math.min(scaling.scale_up_step, scaling.max_replicas - allPodsCount);
+                && (time - lastScaleUpTime) >= service.cooldown_scale_up
+                && allPodsCount < service.max_replicas) {
+                const podsToAdd = Math.min(service.scale_up_step, service.max_replicas - allPodsCount);
                 let needsNewNode = false;
                 for (let i = 0; i < podsToAdd; i++) {
                     // Check if we need node provisioning (new node when pods exceed current node capacity)
-                    let startupDelay = scaling.startup_time;
-                    const currentNodePods = totalPodsEverScheduled % advanced.pods_per_node;
-                    const nodesUsed = Math.ceil(totalPodsEverScheduled / advanced.pods_per_node);
+                    let startupDelay = service.startup_time;
+                    const currentNodePods = totalPodsEverScheduled % service.pods_per_node;
+                    const nodesUsed = Math.ceil(totalPodsEverScheduled / service.pods_per_node);
                     if (currentNodePods === 0 && totalPodsEverScheduled > 0
-                        && advanced.node_provisioning_time > 0
-                        && nodesUsed < advanced.cluster_node_capacity) {
-                        startupDelay += advanced.node_provisioning_time;
+                        && service.node_provisioning_time > 0
+                        && nodesUsed < service.cluster_node_capacity) {
+                        startupDelay += service.node_provisioning_time;
                         needsNewNode = true;
                     }
                     pods.push({
                         id: nextPodId++,
                         state: 'starting',
                         stateTimer: startupDelay,
-                        needsNodeProvisioning: startupDelay > scaling.startup_time,
+                        needsNodeProvisioning: startupDelay > service.startup_time,
                     });
                     totalPodsEverScheduled++;
                 }
                 lastScaleUpTime = time;
                 scaleEvent = 'up';
-                let msg = `Scaled up +${podsToAdd} pod${podsToAdd > 1 ? 's' : ''}: observed utilization ${(delayedUtilization * 100).toFixed(0)}% exceeds ${scaling.scale_up_threshold}% threshold`;
+                let msg = `Scaled up +${podsToAdd} pod${podsToAdd > 1 ? 's' : ''}: observed utilization ${(delayedUtilization * 100).toFixed(0)}% exceeds ${service.scale_up_threshold}% threshold`;
                 if (needsNewNode)
                     msg += ' (provisioning new node)';
                 logEntries.push(msg);
             }
-            else if (delayedUtilization > scaleUpThresholdFraction && allPodsCount >= scaling.max_replicas) {
-                logEntries.push(`At max replicas (${scaling.max_replicas}), cannot scale up despite ${(delayedUtilization * 100).toFixed(0)}% utilization`);
+            else if (delayedUtilization > scaleUpThresholdFraction && allPodsCount >= service.max_replicas) {
+                logEntries.push(`At max replicas (${service.max_replicas}), cannot scale up despite ${(delayedUtilization * 100).toFixed(0)}% utilization`);
             }
             else if (delayedUtilization > scaleUpThresholdFraction
-                && (time - lastScaleUpTime) < advanced.cooldown_scale_up) {
-                const remaining = advanced.cooldown_scale_up - (time - lastScaleUpTime);
+                && (time - lastScaleUpTime) < service.cooldown_scale_up) {
+                const remaining = service.cooldown_scale_up - (time - lastScaleUpTime);
                 logEntries.push(`Scale-up needed but cooldown active (${remaining}s remaining)`);
             }
             // Scale down check
-            const scaleDownThresholdFraction = scaling.scale_down_threshold / 100;
+            const scaleDownThresholdFraction = service.scale_down_threshold / 100;
             if (delayedUtilization < scaleDownThresholdFraction
-                && (time - lastScaleDownTime) >= advanced.cooldown_scale_down
-                && runningPods.length > scaling.min_replicas) {
-                const podsToRemoveCount = Math.min(scaling.scale_down_step, runningPods.length - scaling.min_replicas);
+                && (time - lastScaleDownTime) >= service.cooldown_scale_down
+                && runningPods.length > service.min_replicas) {
+                const podsToRemoveCount = Math.min(service.scale_down_step, runningPods.length - service.min_replicas);
                 // Start graceful shutdown for selected pods
                 for (let i = 0; i < podsToRemoveCount; i++) {
                     const pod = runningPods[runningPods.length - 1 - i];
                     if (pod) {
                         pod.state = 'shutting_down';
-                        pod.stateTimer = advanced.graceful_shutdown_time;
+                        pod.stateTimer = service.graceful_shutdown_time;
                     }
                 }
                 lastScaleDownTime = time;
                 if (scaleEvent === null)
                     scaleEvent = 'down';
-                logEntries.push(`Scaled down -${podsToRemoveCount} pod${podsToRemoveCount > 1 ? 's' : ''}: observed utilization ${(delayedUtilization * 100).toFixed(0)}% below ${scaling.scale_down_threshold}% threshold`);
+                logEntries.push(`Scaled down -${podsToRemoveCount} pod${podsToRemoveCount > 1 ? 's' : ''}: observed utilization ${(delayedUtilization * 100).toFixed(0)}% below ${service.scale_down_threshold}% threshold`);
             }
             else if (delayedUtilization < scaleDownThresholdFraction
-                && runningPods.length <= scaling.min_replicas
+                && runningPods.length <= service.min_replicas
                 && runningPods.length > 0
                 && delayedUtilization > 0) {
-                logEntries.push(`Already at min replicas (${scaling.min_replicas}), cannot scale down further`);
+                logEntries.push(`Already at min replicas (${service.min_replicas}), cannot scale down further`);
             }
-            // --- Expire timed-out requests from queue ---
-            const expired = this.expireQueuedRequests(queuedRequests, capacity, queue);
+            // --- Expire timed-out requests from broker queue ---
+            const expired = this.expireQueuedRequests(queuedRequests, capacity, broker);
             queuedRequests -= expired;
             if (expired > 0) {
-                logEntries.push(`Expired ${Math.round(expired)} requests from queue (exceeded ${queue.request_timeout_ms}ms timeout)`);
+                logEntries.push(`Expired ${Math.round(expired)} requests from broker (exceeded ${broker.request_timeout_ms}ms timeout)`);
             }
-            // --- Resolve overflow (OLTP drop vs Queue buffer) ---
-            const overflow = this.resolveOverflow(effectiveTraffic, capacity, queuedRequests, queue);
+            // --- Resolve overflow (OLTP drop vs Broker buffer) ---
+            const overflow = this.resolveOverflow(effectiveTraffic, capacity, queuedRequests, broker);
             const { served, dropped } = overflow;
             queuedRequests = overflow.queueDepth;
             for (const msg of overflow.logEntries)
@@ -223,16 +223,16 @@ export class LocalSimulationService {
                 : 0;
             // --- Schedule retries for next tick ---
             const retriable = dropped + expired;
-            if (queue.retry_rate > 0 && retriable > 0) {
-                pendingRetries = Math.round(retriable * queue.retry_rate);
+            if (producer.retry_rate > 0 && retriable > 0) {
+                pendingRetries = Math.round(retriable * producer.retry_rate);
                 if (pendingRetries > 0) {
-                    logEntries.push(`${pendingRetries} requests will retry next tick (${(queue.retry_rate * 100).toFixed(0)}% retry rate)`);
+                    logEntries.push(`${pendingRetries} requests will retry next tick (${(producer.retry_rate * 100).toFixed(0)}% retry rate)`);
                 }
             }
             // Log drop transitions
             if (dropped > 0 && !prevDropping) {
-                if (queue.enabled) {
-                    logEntries.push(`Queue full — dropping requests: ${Math.round(dropped)} RPS overflow (queue max: ${queue.max_size})`);
+                if (broker.enabled) {
+                    logEntries.push(`Broker full — dropping requests: ${Math.round(dropped)} RPS overflow (broker max: ${broker.max_size})`);
                 }
                 else {
                     logEntries.push(`Dropping requests: traffic ${Math.round(effectiveTraffic)} RPS exceeds capacity ${Math.round(capacity)} RPS (${Math.round(dropped)} RPS dropped)`);
@@ -244,14 +244,14 @@ export class LocalSimulationService {
                 prevDropping = false;
             }
             // Log backpressure if active
-            if (queue.enabled && queue.backpressure_threshold > 0 && capacity < baseCapacity) {
+            if (broker.enabled && service.backpressure_threshold > 0 && capacity < baseCapacity) {
                 const reductionPct = ((1 - capacity / baseCapacity) * 100).toFixed(0);
-                logEntries.push(`Backpressure: capacity reduced ${reductionPct}% (queue depth ${Math.round(queuedRequests)} exceeds threshold ${queue.backpressure_threshold})`);
+                logEntries.push(`Backpressure: capacity reduced ${reductionPct}% (queue depth ${Math.round(queuedRequests)} exceeds threshold ${service.backpressure_threshold})`);
             }
             // Cost calculation: per-tick cost for all non-terminated pods
             const tickHours = simulation.tick_interval / 3600;
             const billablePods = pods.length; // All pods incur cost
-            cumulativeCost += billablePods * advanced.cost_per_replica_hour * tickHours;
+            cumulativeCost += billablePods * service.cost_per_replica_hour * tickHours;
             // Re-count pod states after autoscaler decisions for accurate snapshot
             let snapshotRunning = 0;
             let snapshotStarting = 0;
@@ -292,11 +292,11 @@ export class LocalSimulationService {
     /**
      * Determines how overflow traffic is handled for a single tick.
      * OLTP mode: excess is dropped immediately.
-     * Queue mode: excess is buffered, only dropped when queue is full.
+     * Broker mode: excess is buffered, only dropped when broker is full.
      */
-    resolveOverflow(traffic, capacity, currentQueueDepth, queue) {
+    resolveOverflow(traffic, capacity, currentQueueDepth, broker) {
         const logEntries = [];
-        if (!queue.enabled) {
+        if (!broker.enabled) {
             return {
                 served: Math.min(traffic, capacity),
                 dropped: Math.max(0, traffic - capacity),
@@ -309,12 +309,12 @@ export class LocalSimulationService {
         const unserved = totalDemand - served;
         let queueDepth;
         let dropped;
-        if (queue.max_size > 0) {
-            queueDepth = Math.min(unserved, queue.max_size);
-            dropped = Math.max(0, unserved - queue.max_size);
+        if (broker.max_size > 0) {
+            queueDepth = Math.min(unserved, broker.max_size);
+            dropped = Math.max(0, unserved - broker.max_size);
         }
         else {
-            // max_size 0 = unlimited queue
+            // max_size 0 = unlimited broker queue
             queueDepth = unserved;
             dropped = 0;
         }
@@ -328,16 +328,16 @@ export class LocalSimulationService {
      * Models real-world degradation from memory pressure, GC pauses, and context switching
      * under deep queue conditions. Degradation is linear from threshold to 2x threshold.
      */
-    applyBackpressure(baseCapacity, queueDepth, queue) {
-        if (!queue.enabled || queue.backpressure_threshold <= 0 || queue.max_capacity_reduction <= 0) {
+    applyBackpressure(baseCapacity, queueDepth, brokerEnabled, service) {
+        if (!brokerEnabled || service.backpressure_threshold <= 0 || service.max_capacity_reduction <= 0) {
             return baseCapacity;
         }
-        if (queueDepth <= queue.backpressure_threshold) {
+        if (queueDepth <= service.backpressure_threshold) {
             return baseCapacity;
         }
-        const excess = queueDepth - queue.backpressure_threshold;
-        const factor = Math.min(1, excess / queue.backpressure_threshold);
-        const reduction = factor * queue.max_capacity_reduction;
+        const excess = queueDepth - service.backpressure_threshold;
+        const factor = Math.min(1, excess / service.backpressure_threshold);
+        const reduction = factor * service.max_capacity_reduction;
         return baseCapacity * (1 - reduction);
     }
     /**
@@ -345,16 +345,16 @@ export class LocalSimulationService {
      * Uses Little's Law: wait_time = queue_depth / capacity.
      * Returns the number of requests expired.
      */
-    expireQueuedRequests(queueDepth, capacity, queue) {
-        if (!queue.enabled || queue.request_timeout_ms <= 0 || queueDepth <= 0 || capacity <= 0) {
+    expireQueuedRequests(queueDepth, capacity, broker) {
+        if (!broker.enabled || broker.request_timeout_ms <= 0 || queueDepth <= 0 || capacity <= 0) {
             return 0;
         }
         const waitTimeMs = (queueDepth / capacity) * 1000;
-        if (waitTimeMs <= queue.request_timeout_ms) {
+        if (waitTimeMs <= broker.request_timeout_ms) {
             return 0;
         }
         // Trim queue to the depth where wait_time = timeout
-        const maxQueueForTimeout = Math.floor(capacity * queue.request_timeout_ms / 1000);
+        const maxQueueForTimeout = Math.floor(capacity * broker.request_timeout_ms / 1000);
         return Math.max(0, queueDepth - maxQueueForTimeout);
     }
     calculateSummary(snapshots, tickInterval) {

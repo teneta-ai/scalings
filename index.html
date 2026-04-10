@@ -246,49 +246,38 @@
         </div>
       </div>
 
+      <div class="param-row">
+          <label for="param-retry_rate" title="Fraction of dropped/expired requests that retry next tick (0-1). Models retry storms — when clients retry failed requests, they amplify the traffic load.">Retry Rate</label>
+          <input type="number" id="param-retry_rate" min="0" max="1" step="0.05" value="0" aria-label="Retry rate" title="Fraction of dropped/expired requests that retry next tick (0-1). 0.3 = 30% of failures retry.">
+          <span class="unit">ratio</span>
+          <button class="tooltip-btn" data-tooltip="Fraction of dropped or expired requests that re-enter as new traffic on the next tick. Models retry storms: when clients retry failed requests, they amplify the traffic load and can cause cascading failures. 0 = no retries. 0.3 = 30% of failures retry.">?</button>
+        </div>
+
       </div>
     </section>
 
-    <!-- QUEUE MODE -->
-    <section id="queue-section" class="card cyan-border">
-      <div class="queue-toggle-row">
-        <label class="queue-mode-toggle" title="Switch between OLTP (drop on overflow) and Queue (buffer on overflow) processing patterns">
-          <input type="checkbox" id="queue-enabled">
-          <span class="queue-toggle-label">Queue Mode</span>
+    <!-- MESSAGE BROKER (optional middleware) -->
+    <section id="broker-section" class="card cyan-border">
+      <div class="broker-toggle-row">
+        <label class="broker-mode-toggle" title="Enable a message broker between producer and service (like SQS, Kafka, or a buffering load balancer)">
+          <input type="checkbox" id="broker-enabled">
+          <span class="broker-toggle-label">Message Broker</span>
         </label>
-        <button class="tooltip-btn" data-tooltip="OLTP: requests exceeding capacity are dropped immediately. Queue: a single shared queue sits in front of all pods (like SQS, Kafka consumer group, or a buffering load balancer). Overflow is buffered up to max queue size and drained collectively by all serving pods. Requests are only dropped when the queue is full.">?</button>
+        <button class="tooltip-btn" data-tooltip="Without broker: requests exceeding capacity are dropped immediately. With broker: a shared queue sits between producer and service (like SQS, Kafka consumer group, or a buffering load balancer). Overflow is buffered up to max size and drained by all serving pods. Requests are only dropped when the broker is full.">?</button>
       </div>
-      <div id="queue-params" class="queue-params hidden">
+      <div id="broker-params" class="broker-params hidden">
         <div class="param-row">
-          <label for="param-queue_max_size" title="Maximum number of requests that can be queued (0 = unlimited)">Max Queue Size</label>
-          <input type="number" id="param-queue_max_size" min="0" max="100000" value="1000" aria-label="Max queue size" title="Maximum requests to buffer. 0 = unlimited queue.">
-          <span class="unit" id="queue-size-unit">req</span>
-          <button id="queue-unlimited-btn" class="btn btn-small btn-secondary" title="Toggle unlimited queue (no drops)">Unlimited</button>
-          <button class="tooltip-btn" data-tooltip="Maximum number of requests that can wait in the queue. When the queue is full, new requests are dropped. Set to 0 for unlimited (no drops ever — pure backpressure).">?</button>
+          <label for="param-broker_max_size" title="Maximum number of requests that can be queued (0 = unlimited)">Max Queue Size</label>
+          <input type="number" id="param-broker_max_size" min="0" max="100000" value="1000" aria-label="Max queue size" title="Maximum requests to buffer. 0 = unlimited queue.">
+          <span class="unit" id="broker-size-unit">req</span>
+          <button id="broker-unlimited-btn" class="btn btn-small btn-secondary" title="Toggle unlimited queue (no drops)">Unlimited</button>
+          <button class="tooltip-btn" data-tooltip="Maximum number of requests that can wait in the broker. When full, new requests are dropped. Set to 0 for unlimited (no drops ever — pure backpressure).">?</button>
         </div>
         <div class="param-row">
-          <label for="param-queue_backpressure_threshold" title="Queue depth at which capacity starts degrading. Models memory pressure, GC pauses, and context switching under deep queue. 0 = no degradation.">Backpressure Threshold</label>
-          <input type="number" id="param-queue_backpressure_threshold" min="0" max="100000" value="0" aria-label="Backpressure threshold" title="Queue depth at which capacity starts degrading. Degradation reaches maximum at 2x this value. 0 = disabled.">
-          <span class="unit">req</span>
-          <button class="tooltip-btn" data-tooltip="When queue depth exceeds this threshold, serving capacity degrades linearly (simulating memory pressure, GC pauses, context switching). The degradation reaches the maximum reduction at 2x this value. Set to 0 to disable backpressure degradation.">?</button>
-        </div>
-        <div class="param-row">
-          <label for="param-queue_max_capacity_reduction" title="Maximum fraction of capacity lost due to backpressure (0-1). For example, 0.3 means up to 30% capacity loss when queue is deeply backed up.">Max Capacity Reduction</label>
-          <input type="number" id="param-queue_max_capacity_reduction" min="0" max="1" step="0.05" value="0" aria-label="Max capacity reduction" title="Maximum capacity reduction from backpressure (0-1). 0.3 = up to 30% capacity loss at peak queue depth.">
-          <span class="unit">ratio</span>
-          <button class="tooltip-btn" data-tooltip="Maximum fraction of serving capacity that can be lost due to queue backpressure. E.g., 0.3 means capacity can drop to 70% of normal when queue is deeply backed up. This creates a realistic feedback loop: deep queue → slower processing → even deeper queue.">?</button>
-        </div>
-        <div class="param-row">
-          <label for="param-queue_request_timeout_ms" title="Maximum time (ms) a request can wait in the queue before being expired/dropped. Models client-side timeouts. 0 = no timeout.">Request Timeout</label>
-          <input type="number" id="param-queue_request_timeout_ms" min="0" max="300000" step="1000" value="0" aria-label="Request timeout in milliseconds" title="Max wait time in milliseconds before a queued request is expired. Models client timeouts. 0 = no timeout.">
+          <label for="param-request_timeout_ms" title="Maximum time (ms) a request can wait in the broker before being expired/dropped. Models client-side timeouts. 0 = no timeout.">Request Timeout</label>
+          <input type="number" id="param-request_timeout_ms" min="0" max="300000" step="1000" value="0" aria-label="Request timeout in milliseconds" title="Max wait time in milliseconds before a queued request is expired. Models client timeouts. 0 = no timeout.">
           <span class="unit">ms</span>
-          <button class="tooltip-btn" data-tooltip="Maximum time a request waits in the queue before being expired (dropped). Models client-side timeouts — after this duration, the client has already given up. Expired requests are removed from the queue and may trigger retries. 0 = no timeout.">?</button>
-        </div>
-        <div class="param-row">
-          <label for="param-queue_retry_rate" title="Fraction of dropped/expired requests that retry next tick (0-1). Models retry storms — when clients retry failed requests, they amplify the traffic load.">Retry Rate</label>
-          <input type="number" id="param-queue_retry_rate" min="0" max="1" step="0.05" value="0" aria-label="Retry rate" title="Fraction of dropped/expired requests that retry next tick (0-1). 0.3 = 30% of failures retry.">
-          <span class="unit">ratio</span>
-          <button class="tooltip-btn" data-tooltip="Fraction of dropped or expired requests that re-enter as new traffic on the next tick. Models retry storms: when clients retry failed requests, they amplify the traffic load and can cause cascading failures. 0 = no retries. 0.3 = 30% of failures retry.">?</button>
+          <button class="tooltip-btn" data-tooltip="Maximum time a request waits in the broker before being expired (dropped). Models client-side timeouts — after this duration, the client has already given up. Expired requests may trigger retries. 0 = no timeout.">?</button>
         </div>
       </div>
     </section>
@@ -399,6 +388,27 @@
             <button class="tooltip-btn" data-tooltip="Cost per pod/instance per hour in USD. Used to estimate total simulation cost.">?</button>
           </div>
         </fieldset>
+      </div>
+    </section>
+
+    <!-- BACKPRESSURE (service degradation under broker load) -->
+    <section id="backpressure-section" class="card orange-border">
+      <button id="backpressure-toggle" class="toggle-btn" aria-label="Toggle backpressure parameters" aria-expanded="false" aria-controls="backpressure-content">
+        <span class="toggle-arrow">&#9654;</span> Backpressure
+      </button>
+      <div id="backpressure-content" class="collapsible-content collapsed">
+        <div class="param-row">
+          <label for="param-backpressure_threshold" title="Queue depth at which capacity starts degrading. Models memory pressure, GC pauses, and context switching under deep queue. 0 = no degradation.">Backpressure Threshold</label>
+          <input type="number" id="param-backpressure_threshold" min="0" max="100000" value="0" aria-label="Backpressure threshold" title="Queue depth at which capacity starts degrading. Degradation reaches maximum at 2x this value. 0 = disabled.">
+          <span class="unit">req</span>
+          <button class="tooltip-btn" data-tooltip="When broker queue depth exceeds this threshold, the service's capacity degrades linearly (simulating memory pressure, GC pauses, context switching). Degradation reaches the maximum at 2x this value. Set to 0 to disable.">?</button>
+        </div>
+        <div class="param-row">
+          <label for="param-max_capacity_reduction" title="Maximum fraction of capacity lost due to backpressure (0-1). For example, 0.3 means up to 30% capacity loss when queue is deeply backed up.">Max Capacity Reduction</label>
+          <input type="number" id="param-max_capacity_reduction" min="0" max="1" step="0.05" value="0" aria-label="Max capacity reduction" title="Maximum capacity reduction from backpressure (0-1). 0.3 = up to 30% capacity loss at peak queue depth.">
+          <span class="unit">ratio</span>
+          <button class="tooltip-btn" data-tooltip="Maximum fraction of serving capacity lost due to backpressure. E.g., 0.3 means capacity can drop to 70% of normal when the broker queue is deeply backed up. Creates a feedback loop: deep queue → slower processing → deeper queue.">?</button>
+        </div>
       </div>
     </section>
 

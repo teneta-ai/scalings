@@ -17,7 +17,25 @@ export interface SimulationParams {
   tick_interval: number;  // seconds
 }
 
-export interface ScalingParams {
+// --- Producer: generates traffic, retries failures ---
+
+export interface ProducerConfig {
+  retry_rate: number;         // 0-1 fraction of dropped/expired requests that retry next tick
+  traffic: TrafficConfig;
+}
+
+// --- Broker: optional message queue between producer and service ---
+
+export interface BrokerConfig {
+  enabled: boolean;
+  max_size: number;           // max queued requests (0 = unlimited)
+  request_timeout_ms: number; // max wait time before request expires from queue (0 = no timeout)
+}
+
+// --- Service: pod fleet, scaling, degradation, chaos ---
+
+export interface ServiceConfig {
+  // Basic scaling
   min_replicas: number;
   max_replicas: number;
   scale_up_threshold: number;     // capacity utilization percent (0-100)
@@ -26,9 +44,7 @@ export interface ScalingParams {
   startup_time: number;           // seconds
   scale_up_step: number;
   scale_down_step: number;
-}
-
-export interface AdvancedParams {
+  // Advanced
   metric_observation_delay: number;   // seconds
   cooldown_scale_up: number;          // seconds
   cooldown_scale_down: number;        // seconds
@@ -37,31 +53,18 @@ export interface AdvancedParams {
   pods_per_node: number;              // max pods that fit on one node
   graceful_shutdown_time: number;     // seconds
   cost_per_replica_hour: number;      // USD
+  // Backpressure (service degrades when broker queue is deep)
+  backpressure_threshold: number;     // queue depth at which capacity starts degrading (0 = disabled)
+  max_capacity_reduction: number;     // 0-1 fraction, max capacity loss from backpressure
+  // Chaos
+  pod_failure_rate: number;           // 0-100 percent probability per tick
+  random_seed: number;                // 0 = non-deterministic, >0 = seeded PRNG
+  failure_events: FailureEvent[];     // scheduled pod kills at specific times
 }
-
-// --- Queue Mode ---
-
-export interface QueueConfig {
-  enabled: boolean;
-  max_size: number;           // max queued requests (0 = unlimited)
-  // Backpressure parameters
-  backpressure_threshold: number;  // queue depth at which capacity starts degrading (0 = disabled)
-  max_capacity_reduction: number;  // 0-1 fraction, max capacity loss from backpressure
-  request_timeout_ms: number;      // max wait time before request expires from queue (0 = no timeout)
-  retry_rate: number;              // 0-1 fraction of dropped/expired requests that retry next tick
-}
-
-// --- Chaos Engineering ---
 
 export interface FailureEvent {
   time: number;       // seconds into the simulation
   count: number;      // number of running pods to kill
-}
-
-export interface ChaosConfig {
-  pod_failure_rate: number;       // 0-100 percent probability per tick
-  random_seed: number;            // 0 = non-deterministic, >0 = seeded PRNG
-  failure_events: FailureEvent[]; // scheduled pod kills at specific times
 }
 
 // --- Traffic Patterns ---
@@ -121,11 +124,9 @@ export interface SimulationConfig {
   description?: string;
   platform: Platform;
   simulation: SimulationParams;
-  scaling: ScalingParams;
-  advanced: AdvancedParams;
-  chaos: ChaosConfig;
-  traffic: TrafficConfig;
-  queue: QueueConfig;
+  producer: ProducerConfig;
+  broker: BrokerConfig;
+  service: ServiceConfig;
 }
 
 // --- Target Config: the deployable output ---
@@ -226,43 +227,6 @@ export interface PresetScenario {
 
 // --- Default Values ---
 
-export const DEFAULT_SCALING: ScalingParams = {
-  min_replicas: 1,
-  max_replicas: 50,
-  scale_up_threshold: 80,
-  scale_down_threshold: 30,
-  capacity_per_replica: 100,
-  startup_time: 30,
-  scale_up_step: 4,
-  scale_down_step: 1,
-};
-
-export const DEFAULT_ADVANCED: AdvancedParams = {
-  metric_observation_delay: 15,
-  cooldown_scale_up: 15,
-  cooldown_scale_down: 60,
-  node_provisioning_time: 120,
-  cluster_node_capacity: 20,
-  pods_per_node: 10,
-  graceful_shutdown_time: 30,
-  cost_per_replica_hour: 0.05,
-};
-
-export const DEFAULT_QUEUE: QueueConfig = {
-  enabled: false,
-  max_size: 1000,
-  backpressure_threshold: 0,
-  max_capacity_reduction: 0,
-  request_timeout_ms: 0,
-  retry_rate: 0,
-};
-
-export const DEFAULT_CHAOS: ChaosConfig = {
-  pod_failure_rate: 0,
-  random_seed: 0,
-  failure_events: [],
-};
-
 export const DEFAULT_SIMULATION: SimulationParams = {
   duration: 600,
   tick_interval: 1,
@@ -278,16 +242,53 @@ export const DEFAULT_TRAFFIC: TrafficConfig = {
   } as SpikeParams,
 };
 
+export const DEFAULT_PRODUCER: ProducerConfig = {
+  retry_rate: 0,
+  traffic: DEFAULT_TRAFFIC,
+};
+
+export const DEFAULT_BROKER: BrokerConfig = {
+  enabled: false,
+  max_size: 1000,
+  request_timeout_ms: 0,
+};
+
+export const DEFAULT_SERVICE: ServiceConfig = {
+  // Basic scaling
+  min_replicas: 1,
+  max_replicas: 50,
+  scale_up_threshold: 80,
+  scale_down_threshold: 30,
+  capacity_per_replica: 100,
+  startup_time: 30,
+  scale_up_step: 4,
+  scale_down_step: 1,
+  // Advanced
+  metric_observation_delay: 15,
+  cooldown_scale_up: 15,
+  cooldown_scale_down: 60,
+  node_provisioning_time: 120,
+  cluster_node_capacity: 20,
+  pods_per_node: 10,
+  graceful_shutdown_time: 30,
+  cost_per_replica_hour: 0.05,
+  // Backpressure
+  backpressure_threshold: 0,
+  max_capacity_reduction: 0,
+  // Chaos
+  pod_failure_rate: 0,
+  random_seed: 0,
+  failure_events: [],
+};
+
 export const DEFAULT_CONFIG: SimulationConfig = {
-  version: 1,
+  version: 2,
   name: 'Untitled Simulation',
   platform: 'kubernetes-hpa',
   simulation: DEFAULT_SIMULATION,
-  scaling: DEFAULT_SCALING,
-  advanced: DEFAULT_ADVANCED,
-  chaos: DEFAULT_CHAOS,
-  traffic: DEFAULT_TRAFFIC,
-  queue: DEFAULT_QUEUE,
+  producer: DEFAULT_PRODUCER,
+  broker: DEFAULT_BROKER,
+  service: DEFAULT_SERVICE,
 };
 
 export const PRESET_SCENARIOS: PresetScenario[] = [
@@ -296,23 +297,23 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
     description: 'Simulating a 10x traffic spike lasting 60 seconds with aggressive scaling',
     config: {
       name: 'Black Friday Spike',
-      scaling: {
-        ...DEFAULT_SCALING,
+      service: {
+        ...DEFAULT_SERVICE,
         min_replicas: 10,
         max_replicas: 100,
         scale_up_threshold: 50,
         scale_up_step: 10,
         startup_time: 30,
         capacity_per_replica: 40,
-      },
-      advanced: {
-        ...DEFAULT_ADVANCED,
         cooldown_scale_up: 15,
         metric_observation_delay: 5,
       },
-      traffic: {
-        pattern: 'spike',
-        params: { base_rps: 200, spike_rps: 2000, spike_start: 120, spike_duration: 60 } as SpikeParams,
+      producer: {
+        ...DEFAULT_PRODUCER,
+        traffic: {
+          pattern: 'spike',
+          params: { base_rps: 200, spike_rps: 2000, spike_start: 120, spike_duration: 60 } as SpikeParams,
+        },
       },
     },
   },
@@ -321,16 +322,19 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
     description: 'Traffic linearly increases from morning to peak, simulating a typical workday',
     config: {
       name: 'Gradual Daily Ramp',
-      scaling: {
-        ...DEFAULT_SCALING,
+      service: {
+        ...DEFAULT_SERVICE,
         min_replicas: 2,
         max_replicas: 30,
         scale_up_threshold: 75,
         capacity_per_replica: 150,
       },
-      traffic: {
-        pattern: 'gradual',
-        params: { start_rps: 50, end_rps: 800 } as GradualParams,
+      producer: {
+        ...DEFAULT_PRODUCER,
+        traffic: {
+          pattern: 'gradual',
+          params: { start_rps: 50, end_rps: 800 } as GradualParams,
+        },
       },
     },
   },
@@ -339,20 +343,20 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
     description: 'Oscillating traffic with random pod failures simulating shared infrastructure',
     config: {
       name: 'Noisy Neighbor',
-      scaling: {
-        ...DEFAULT_SCALING,
+      service: {
+        ...DEFAULT_SERVICE,
         min_replicas: 3,
         max_replicas: 40,
         scale_up_threshold: 65,
         startup_time: 45,
-      },
-      traffic: {
-        pattern: 'wave',
-        params: { base_rps: 300, amplitude: 200, period: 120 } as WaveParams,
-      },
-      chaos: {
-        ...DEFAULT_CHAOS,
         pod_failure_rate: 0.5,
+      },
+      producer: {
+        ...DEFAULT_PRODUCER,
+        traffic: {
+          pattern: 'wave',
+          params: { base_rps: 300, amplitude: 200, period: 120 } as WaveParams,
+        },
       },
     },
   },
@@ -361,56 +365,59 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
     description: 'Traffic increases in discrete steps, simulating a phased rollout',
     config: {
       name: 'Step Migration',
-      scaling: {
-        ...DEFAULT_SCALING,
+      simulation: {
+        ...DEFAULT_SIMULATION,
+        duration: 600,
+      },
+      service: {
+        ...DEFAULT_SERVICE,
         min_replicas: 2,
         max_replicas: 80,
         scale_up_step: 2,
         scale_down_step: 1,
       },
-      simulation: {
-        ...DEFAULT_SIMULATION,
-        duration: 600,
-      },
-      traffic: {
-        pattern: 'step',
-        params: {
-          steps: [
-            { rps: 100, duration: 120 },
-            { rps: 300, duration: 120 },
-            { rps: 600, duration: 120 },
-            { rps: 1000, duration: 120 },
-            { rps: 500, duration: 120 },
-          ],
-        } as StepParams,
+      producer: {
+        ...DEFAULT_PRODUCER,
+        traffic: {
+          pattern: 'step',
+          params: {
+            steps: [
+              { rps: 100, duration: 120 },
+              { rps: 300, duration: 120 },
+              { rps: 600, duration: 120 },
+              { rps: 1000, duration: 120 },
+              { rps: 500, duration: 120 },
+            ],
+          } as StepParams,
+        },
       },
     },
   },
   {
     name: 'Bottomless Queue',
-    description: 'Spike traffic with an unlimited queue — no requests dropped, backlog drains as capacity catches up',
+    description: 'Spike traffic with an unlimited broker — no requests dropped, backlog drains as capacity catches up',
     config: {
       name: 'Bottomless Queue',
-      scaling: {
-        ...DEFAULT_SCALING,
+      service: {
+        ...DEFAULT_SERVICE,
         min_replicas: 2,
         max_replicas: 50,
         scale_up_threshold: 70,
         scale_up_step: 4,
         capacity_per_replica: 100,
         startup_time: 30,
-      },
-      advanced: {
-        ...DEFAULT_ADVANCED,
         cooldown_scale_up: 15,
         metric_observation_delay: 10,
       },
-      traffic: {
-        pattern: 'spike',
-        params: { base_rps: 200, spike_rps: 2000, spike_start: 60, spike_duration: 90 } as SpikeParams,
+      producer: {
+        ...DEFAULT_PRODUCER,
+        traffic: {
+          pattern: 'spike',
+          params: { base_rps: 200, spike_rps: 2000, spike_start: 60, spike_duration: 90 } as SpikeParams,
+        },
       },
-      queue: {
-        ...DEFAULT_QUEUE,
+      broker: {
+        ...DEFAULT_BROKER,
         enabled: true,
         max_size: 0,
       },
@@ -418,34 +425,34 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
   },
   {
     name: 'Backpressure Death Spiral',
-    description: 'Queue backpressure degrades capacity under load, retries amplify traffic — demonstrates how deep queues cause cascading failures',
+    description: 'Broker backpressure degrades capacity under load, retries amplify traffic — demonstrates how deep queues cause cascading failures',
     config: {
       name: 'Backpressure Death Spiral',
-      scaling: {
-        ...DEFAULT_SCALING,
+      service: {
+        ...DEFAULT_SERVICE,
         min_replicas: 3,
         max_replicas: 30,
         scale_up_threshold: 70,
         scale_up_step: 3,
         capacity_per_replica: 100,
         startup_time: 30,
-      },
-      advanced: {
-        ...DEFAULT_ADVANCED,
         cooldown_scale_up: 10,
         metric_observation_delay: 10,
-      },
-      traffic: {
-        pattern: 'spike',
-        params: { base_rps: 200, spike_rps: 1500, spike_start: 30, spike_duration: 60 } as SpikeParams,
-      },
-      queue: {
-        enabled: true,
-        max_size: 5000,
         backpressure_threshold: 500,
         max_capacity_reduction: 0.4,
-        request_timeout_ms: 10000,
+      },
+      producer: {
+        ...DEFAULT_PRODUCER,
         retry_rate: 0.3,
+        traffic: {
+          pattern: 'spike',
+          params: { base_rps: 200, spike_rps: 1500, spike_start: 30, spike_duration: 60 } as SpikeParams,
+        },
+      },
+      broker: {
+        enabled: true,
+        max_size: 5000,
+        request_timeout_ms: 10000,
       },
     },
   },

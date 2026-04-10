@@ -8,7 +8,7 @@ export declare class LocalSimulationService implements SimulationService {
     /**
      * Determines how overflow traffic is handled for a single tick.
      * OLTP mode: excess is dropped immediately.
-     * Queue mode: excess is buffered, only dropped when queue is full.
+     * Broker mode: excess is buffered, only dropped when broker is full.
      */
     private resolveOverflow;
     /**
