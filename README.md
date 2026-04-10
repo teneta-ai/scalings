@@ -89,7 +89,7 @@ src/
 The config is organized around four entities:
 
 - **Producer** — traffic pattern (steady, spike, wave, etc.)
-- **Client** — resilience behavior (retry rate)
+- **Client** — resilience behavior (max retries, retry delay)
 - **Broker** — optional message queue (enabled/disabled, max size, request timeout)
 - **Service** — pod fleet with scaling, cooldowns, saturation, chaos, cost
 
