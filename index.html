@@ -440,6 +440,31 @@
           </div>
         </div>
 
+        <!-- DECISION LOG -->
+        <div class="log-section">
+          <button class="toggle-btn" id="log-toggle" aria-expanded="false">
+            <span class="toggle-arrow">&#9654;</span> Decision Log
+            <span class="log-count" id="log-count"></span>
+          </button>
+          <div id="log-content" class="collapsible-content collapsed">
+            <div class="log-toolbar">
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-scale" checked> Scale events
+              </label>
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-lifecycle" checked> Pod lifecycle
+              </label>
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-failures" checked> Failures
+              </label>
+              <label class="log-filter-label">
+                <input type="checkbox" id="log-filter-traffic" checked> Traffic drops
+              </label>
+            </div>
+            <div id="log-entries" class="log-entries"></div>
+          </div>
+        </div>
+
         </div>
       </div>
     </section>

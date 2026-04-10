@@ -69,19 +69,28 @@ export class LocalSimulationService implements SimulationService {
     // Count total pods on existing nodes for node provisioning tracking
     let totalPodsEverScheduled = scaling.min_replicas;
 
+    // Track state transitions for logging
+    let prevDropping = false;
+
     for (let tick = 0; tick < totalTicks; tick++) {
       const time = tick * simulation.tick_interval;
       const currentTraffic = trafficData[tick] || 0;
+      const logEntries: string[] = [];
 
       // --- Random pod failures ---
       if (chaos.pod_failure_rate > 0) {
         const failureProbability = chaos.pod_failure_rate / 100;
+        let randomKillCount = 0;
         pods = pods.filter(pod => {
           if (pod.state === 'running' && rng() < failureProbability) {
-            return false; // Pod dies
+            randomKillCount++;
+            return false;
           }
           return true;
         });
+        if (randomKillCount > 0) {
+          logEntries.push(`Random failure killed ${randomKillCount} pod${randomKillCount > 1 ? 's' : ''}`);
+        }
       }
 
       // --- Scheduled failure events ---
@@ -91,29 +100,43 @@ export class LocalSimulationService implements SimulationService {
         pods = pods.filter(pod => {
           if (killed < scheduledKills && pod.state === 'running') {
             killed++;
-            return false; // Pod killed by scheduled event
+            return false;
           }
           return true;
         });
+        if (killed > 0) {
+          logEntries.push(`Scheduled failure killed ${killed} pod${killed > 1 ? 's' : ''}`);
+        }
       }
 
       // --- Update pod states ---
       const podsToRemove: number[] = [];
+      let becameReady = 0;
+      let finishedShutdown = 0;
       for (const pod of pods) {
         if (pod.state === 'starting') {
           pod.stateTimer -= simulation.tick_interval;
           if (pod.stateTimer <= 0) {
             pod.state = 'running';
             pod.stateTimer = 0;
+            becameReady++;
           }
         } else if (pod.state === 'shutting_down') {
           pod.stateTimer -= simulation.tick_interval;
           if (pod.stateTimer <= 0) {
             podsToRemove.push(pod.id);
+            finishedShutdown++;
           }
         }
       }
       pods = pods.filter(p => !podsToRemove.includes(p.id));
+
+      if (becameReady > 0) {
+        logEntries.push(`${becameReady} pod${becameReady > 1 ? 's' : ''} finished starting and is now running`);
+      }
+      if (finishedShutdown > 0) {
+        logEntries.push(`${finishedShutdown} pod${finishedShutdown > 1 ? 's' : ''} completed graceful shutdown and terminated`);
+      }
 
       // --- Calculate capacity ---
       const runningPods = pods.filter(p => p.state === 'running');
@@ -140,10 +163,12 @@ export class LocalSimulationService implements SimulationService {
       let scaleEvent: 'up' | 'down' | null = null;
 
       // Scale up check
-      if (delayedUtilization > scaling.scale_up_threshold / 100
+      const scaleUpThresholdFraction = scaling.scale_up_threshold / 100;
+      if (delayedUtilization > scaleUpThresholdFraction
         && (time - lastScaleUpTime) >= advanced.cooldown_scale_up
         && allPodsCount < scaling.max_replicas) {
         const podsToAdd = Math.min(scaling.scale_up_step, scaling.max_replicas - allPodsCount);
+        let needsNewNode = false;
         for (let i = 0; i < podsToAdd; i++) {
           // Check if we need node provisioning (new node when pods exceed current node capacity)
           let startupDelay = scaling.startup_time;
@@ -153,6 +178,7 @@ export class LocalSimulationService implements SimulationService {
             && advanced.node_provisioning_time > 0
             && nodesUsed < advanced.cluster_node_capacity) {
             startupDelay += advanced.node_provisioning_time;
+            needsNewNode = true;
           }
           pods.push({
             id: nextPodId++,
@@ -164,10 +190,20 @@ export class LocalSimulationService implements SimulationService {
         }
         lastScaleUpTime = time;
         scaleEvent = 'up';
+        let msg = `Scaled up +${podsToAdd} pod${podsToAdd > 1 ? 's' : ''}: observed utilization ${(delayedUtilization * 100).toFixed(0)}% exceeds ${scaling.scale_up_threshold}% threshold`;
+        if (needsNewNode) msg += ' (provisioning new node)';
+        logEntries.push(msg);
+      } else if (delayedUtilization > scaleUpThresholdFraction && allPodsCount >= scaling.max_replicas) {
+        logEntries.push(`At max replicas (${scaling.max_replicas}), cannot scale up despite ${(delayedUtilization * 100).toFixed(0)}% utilization`);
+      } else if (delayedUtilization > scaleUpThresholdFraction
+        && (time - lastScaleUpTime) < advanced.cooldown_scale_up) {
+        const remaining = advanced.cooldown_scale_up - (time - lastScaleUpTime);
+        logEntries.push(`Scale-up needed but cooldown active (${remaining}s remaining)`);
       }
 
       // Scale down check
-      if (delayedUtilization < scaling.scale_down_threshold / 100
+      const scaleDownThresholdFraction = scaling.scale_down_threshold / 100;
+      if (delayedUtilization < scaleDownThresholdFraction
         && (time - lastScaleDownTime) >= advanced.cooldown_scale_down
         && runningPods.length > scaling.min_replicas) {
         const podsToRemoveCount = Math.min(
@@ -184,11 +220,26 @@ export class LocalSimulationService implements SimulationService {
         }
         lastScaleDownTime = time;
         if (scaleEvent === null) scaleEvent = 'down';
+        logEntries.push(`Scaled down -${podsToRemoveCount} pod${podsToRemoveCount > 1 ? 's' : ''}: observed utilization ${(delayedUtilization * 100).toFixed(0)}% below ${scaling.scale_down_threshold}% threshold`);
+      } else if (delayedUtilization < scaleDownThresholdFraction
+        && runningPods.length <= scaling.min_replicas
+        && runningPods.length > 0
+        && delayedUtilization > 0) {
+        logEntries.push(`Already at min replicas (${scaling.min_replicas}), cannot scale down further`);
       }
 
       // --- Calculate results ---
       const served = Math.min(currentTraffic, capacity);
       const dropped = Math.max(0, currentTraffic - capacity);
+
+      // Log drop transitions
+      if (dropped > 0 && !prevDropping) {
+        logEntries.push(`Dropping requests: traffic ${Math.round(currentTraffic)} RPS exceeds capacity ${Math.round(capacity)} RPS (${Math.round(dropped)} RPS dropped)`);
+        prevDropping = true;
+      } else if (dropped === 0 && prevDropping) {
+        logEntries.push(`Recovered: capacity ${Math.round(capacity)} RPS now meets traffic ${Math.round(currentTraffic)} RPS`);
+        prevDropping = false;
+      }
 
       // Cost calculation: per-tick cost for all non-terminated pods
       const tickHours = simulation.tick_interval / 3600;
@@ -219,6 +270,7 @@ export class LocalSimulationService implements SimulationService {
         delayed_utilization: Math.min(delayedUtilization, 2),
         estimated_cost: cumulativeCost,
         scale_event: scaleEvent,
+        log_entries: logEntries,
       });
     }
 

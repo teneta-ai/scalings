@@ -108,6 +108,7 @@ export interface TickSnapshot {
     delayed_utilization: number;
     estimated_cost: number;
     scale_event: 'up' | 'down' | null;
+    log_entries: string[];
 }
 export interface SimulationResult {
     snapshots: TickSnapshot[];

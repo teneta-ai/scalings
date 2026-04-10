@@ -398,4 +398,130 @@ describe('SimulationService — failure events', () => {
         assert.equal(atEvent.running_pods, 0, `expected 0 running pods, got ${atEvent.running_pods}`);
     });
 });
+// ---------------------------------------------------------------------------
+// Decision log entries
+// ---------------------------------------------------------------------------
+describe('SimulationService — log entries', () => {
+    it('every snapshot has a log_entries array', async () => {
+        const config = makeConfig();
+        const result = await svc.run(config);
+        for (const snap of result.snapshots) {
+            assert.ok(Array.isArray(snap.log_entries), `t=${snap.time}: log_entries should be an array`);
+        }
+    });
+    it('logs scale-up events with utilization info', async () => {
+        const config = makeConfig({
+            simulation: { duration: 30, tick_interval: 1 },
+            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 1 },
+            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            traffic: { pattern: 'steady', params: { rps: 500 } },
+        });
+        const result = await svc.run(config);
+        const scaleUpLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.startsWith('Scaled up'));
+        assert.ok(scaleUpLogs.length > 0, 'should have at least one scale-up log');
+        assert.ok(scaleUpLogs[0].includes('exceeds'), 'scale-up log should mention exceeding threshold');
+        assert.ok(scaleUpLogs[0].includes('threshold'), 'scale-up log should mention threshold');
+    });
+    it('logs scale-down events with utilization info', async () => {
+        const config = makeConfig({
+            simulation: { duration: 200, tick_interval: 1 },
+            scaling: {
+                ...DEFAULT_SCALING,
+                min_replicas: 2,
+                max_replicas: 20,
+                capacity_per_replica: 100,
+                startup_time: 1,
+                scale_up_step: 5,
+            },
+            advanced: {
+                ...DEFAULT_ADVANCED,
+                metric_observation_delay: 0,
+                cooldown_scale_up: 0,
+                cooldown_scale_down: 5,
+                node_provisioning_time: 0,
+                graceful_shutdown_time: 1,
+            },
+            traffic: {
+                pattern: 'spike',
+                params: { base_rps: 50, spike_rps: 1500, spike_start: 5, spike_duration: 20 },
+            },
+        });
+        const result = await svc.run(config);
+        const scaleDownLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.startsWith('Scaled down'));
+        assert.ok(scaleDownLogs.length > 0, 'should have at least one scale-down log');
+        assert.ok(scaleDownLogs[0].includes('below'), 'scale-down log should mention below threshold');
+    });
+    it('logs scheduled failure events', async () => {
+        const config = makeConfig({
+            simulation: { duration: 30, tick_interval: 1 },
+            scaling: { ...DEFAULT_SCALING, min_replicas: 5, max_replicas: 5, capacity_per_replica: 100 },
+            chaos: {
+                ...DEFAULT_CHAOS,
+                failure_events: [{ time: 10, count: 3 }],
+            },
+            traffic: { pattern: 'steady', params: { rps: 100 } },
+        });
+        const result = await svc.run(config);
+        const failureLogs = result.snapshots[10].log_entries.filter(l => l.includes('Scheduled failure'));
+        assert.ok(failureLogs.length === 1, 'should have one scheduled failure log at t=10');
+        assert.ok(failureLogs[0].includes('3'), 'should mention 3 pods killed');
+    });
+    it('logs pod lifecycle transitions', async () => {
+        const config = makeConfig({
+            simulation: { duration: 30, tick_interval: 1 },
+            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 10, capacity_per_replica: 100, startup_time: 5 },
+            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            traffic: { pattern: 'steady', params: { rps: 500 } },
+        });
+        const result = await svc.run(config);
+        const readyLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('finished starting'));
+        assert.ok(readyLogs.length > 0, 'should log when pods finish starting');
+    });
+    it('logs drop start and recovery', async () => {
+        const config = makeConfig({
+            simulation: { duration: 120, tick_interval: 1 },
+            scaling: {
+                ...DEFAULT_SCALING,
+                min_replicas: 2,
+                max_replicas: 30,
+                capacity_per_replica: 100,
+                startup_time: 1,
+                scale_up_step: 10,
+            },
+            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            traffic: {
+                pattern: 'spike',
+                params: { base_rps: 100, spike_rps: 2000, spike_start: 10, spike_duration: 20 },
+            },
+        });
+        const result = await svc.run(config);
+        const allLogs = result.snapshots.flatMap(s => s.log_entries);
+        const dropLogs = allLogs.filter(l => l.startsWith('Dropping'));
+        const recoverLogs = allLogs.filter(l => l.startsWith('Recovered'));
+        assert.ok(dropLogs.length > 0, 'should log when drops begin');
+        assert.ok(recoverLogs.length > 0, 'should log when system recovers');
+    });
+    it('logs max replicas warning when at ceiling', async () => {
+        const config = makeConfig({
+            simulation: { duration: 60, tick_interval: 1 },
+            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 3, capacity_per_replica: 100, startup_time: 1 },
+            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            traffic: { pattern: 'steady', params: { rps: 5000 } },
+        });
+        const result = await svc.run(config);
+        const maxLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.startsWith('At max replicas'));
+        assert.ok(maxLogs.length > 0, 'should log max replicas warning');
+    });
+    it('logs cooldown blocking scale-up', async () => {
+        const config = makeConfig({
+            simulation: { duration: 30, tick_interval: 1 },
+            scaling: { ...DEFAULT_SCALING, min_replicas: 1, max_replicas: 50, capacity_per_replica: 100, startup_time: 1, scale_up_step: 1 },
+            advanced: { ...DEFAULT_ADVANCED, metric_observation_delay: 0, cooldown_scale_up: 10, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            traffic: { pattern: 'steady', params: { rps: 5000 } },
+        });
+        const result = await svc.run(config);
+        const cooldownLogs = result.snapshots.flatMap(s => s.log_entries).filter(l => l.includes('cooldown active'));
+        assert.ok(cooldownLogs.length > 0, 'should log cooldown blocking');
+    });
+});
 //# sourceMappingURL=simulation.test.js.map
