@@ -56,7 +56,7 @@ npm run build      # compile TypeScript
 npm test           # build + run all tests (node:test)
 ```
 
-Tests must pass before committing. Currently 101 tests across simulation, config, export, and traffic services.
+Tests must pass before committing. Currently 116 tests across simulation, config, export, and traffic services.
 
 ## Architecture
 
