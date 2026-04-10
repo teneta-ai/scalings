@@ -277,13 +277,13 @@ class App {
                 const speed = parseFloat(document.getElementById('playback-speed')?.value || '5');
                 await this.chart.renderAnimated('sim-chart', result, speed);
             }
-            this.renderSummary(result.summary);
             this.runCounter++;
-            const runName = `Run ${this.runCounter}`;
             if (this.isRecording) {
+                this.renderMultiRunSummary(this.recordedRuns);
                 this.renderMultiRunLog(this.recordedRuns);
             }
             else {
+                this.renderSummary(result.summary);
                 this.renderLog(result.snapshots, null);
             }
         }
@@ -363,6 +363,50 @@ class App {
         if (dropRateEl) {
             dropRateEl.classList.toggle('danger', summary.drop_rate_percent > 1);
         }
+    }
+    renderMultiRunSummary(runs) {
+        const stats = [
+            { id: 'stat-total-requests', extract: s => this.formatNumber(s.total_requests) },
+            { id: 'stat-served', extract: s => this.formatNumber(s.total_served) },
+            { id: 'stat-dropped', extract: s => this.formatNumber(s.total_dropped) },
+            { id: 'stat-drop-rate', extract: s => `${s.drop_rate_percent.toFixed(2)}%` },
+            { id: 'stat-peak-pods', extract: s => s.peak_pod_count.toString() },
+            { id: 'stat-peak-queue', cardId: 'stat-card-peak-queue', extract: s => this.formatNumber(s.peak_queue_depth), showIf: s => s.peak_queue_depth > 0 },
+            { id: 'stat-peak-wait', cardId: 'stat-card-peak-wait', extract: s => {
+                    const ms = s.peak_queue_wait_time_ms;
+                    return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+                }, showIf: s => s.peak_queue_wait_time_ms > 0 },
+            { id: 'stat-expired', cardId: 'stat-card-expired', extract: s => this.formatNumber(s.total_expired), showIf: s => s.total_expired > 0 },
+            { id: 'stat-retries', cardId: 'stat-card-retries', extract: s => this.formatNumber(s.total_retries), showIf: s => s.total_retries > 0 },
+            { id: 'stat-underprov-time', extract: s => `${s.time_under_provisioned_seconds}s (${s.time_under_provisioned_percent.toFixed(1)}%)` },
+            { id: 'stat-recovery-time', extract: s => s.time_to_recover_seconds !== null ? `${s.time_to_recover_seconds}s` : 'N/A' },
+            { id: 'stat-cost', extract: s => `$${s.estimated_total_cost.toFixed(4)}` },
+        ];
+        for (const stat of stats) {
+            // Show/hide conditional cards
+            if (stat.cardId) {
+                const card = document.getElementById(stat.cardId);
+                if (card) {
+                    const anyVisible = runs.some(r => stat.showIf(r.result.summary));
+                    card.classList.toggle('hidden', !anyVisible);
+                    if (!anyVisible)
+                        continue;
+                }
+            }
+            const el = document.getElementById(stat.id);
+            if (!el)
+                continue;
+            const lines = runs.map(r => `<span class="stat-run-line"><span class="stat-run-label">${r.name}:</span> ${stat.extract(r.result.summary)}</span>`);
+            el.innerHTML = lines.join('');
+        }
+        // Highlight drops based on latest run
+        const latest = runs[runs.length - 1].result.summary;
+        const droppedEl = document.getElementById('stat-dropped');
+        if (droppedEl)
+            droppedEl.classList.toggle('danger', latest.total_dropped > 0);
+        const dropRateEl = document.getElementById('stat-drop-rate');
+        if (dropRateEl)
+            dropRateEl.classList.toggle('danger', latest.drop_rate_percent > 1);
     }
     // --- Decision Log ---
     classifyLog(msg) {
