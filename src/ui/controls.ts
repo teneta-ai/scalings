@@ -433,7 +433,18 @@ export class UIControls {
 
     const maxSizeInput = document.getElementById('param-queue_max_size') as HTMLInputElement;
     if (maxSizeInput) {
-      maxSizeInput.addEventListener('input', () => this.notifyChange());
+      maxSizeInput.addEventListener('input', () => {
+        this.updateQueueSizeHint(maxSizeInput);
+        this.notifyChange();
+      });
+      this.updateQueueSizeHint(maxSizeInput);
+    }
+  }
+
+  private updateQueueSizeHint(input: HTMLInputElement): void {
+    const unit = document.getElementById('queue-size-unit');
+    if (unit) {
+      unit.textContent = parseFloat(input.value) === 0 ? '= unlimited' : 'req';
     }
   }
 
@@ -453,6 +464,8 @@ export class UIControls {
       if (params) params.classList.toggle('hidden', !queue.enabled);
     }
     this.setNumericValue('param-queue_max_size', queue.max_size);
+    const maxSizeInput = document.getElementById('param-queue_max_size') as HTMLInputElement;
+    if (maxSizeInput) this.updateQueueSizeHint(maxSizeInput);
   }
 
   private getFailureEvents(): FailureEvent[] {

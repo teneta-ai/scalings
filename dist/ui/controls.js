@@ -373,7 +373,17 @@ export class UIControls {
         }
         const maxSizeInput = document.getElementById('param-queue_max_size');
         if (maxSizeInput) {
-            maxSizeInput.addEventListener('input', () => this.notifyChange());
+            maxSizeInput.addEventListener('input', () => {
+                this.updateQueueSizeHint(maxSizeInput);
+                this.notifyChange();
+            });
+            this.updateQueueSizeHint(maxSizeInput);
+        }
+    }
+    updateQueueSizeHint(input) {
+        const unit = document.getElementById('queue-size-unit');
+        if (unit) {
+            unit.textContent = parseFloat(input.value) === 0 ? '= unlimited' : 'req';
         }
     }
     getQueueConfig() {
@@ -392,6 +402,9 @@ export class UIControls {
                 params.classList.toggle('hidden', !queue.enabled);
         }
         this.setNumericValue('param-queue_max_size', queue.max_size);
+        const maxSizeInput = document.getElementById('param-queue_max_size');
+        if (maxSizeInput)
+            this.updateQueueSizeHint(maxSizeInput);
     }
     getFailureEvents() {
         const container = document.getElementById('failure-events-container');
