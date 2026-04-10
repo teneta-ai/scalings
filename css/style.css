@@ -940,6 +940,22 @@ button:active, .btn:active {
   text-shadow: 0 0 10px var(--red-dim);
 }
 
+.summary-run-id {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 0.4rem 0.8rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  letter-spacing: 0.5px;
+}
+
+.summary-run-id.hidden {
+  display: none;
+}
+
 .stat-run-line {
   display: block;
   font-size: 0.85rem;
@@ -1090,6 +1106,14 @@ button:active, .btn:active {
   font-weight: 600;
   font-size: 0.75rem;
   white-space: nowrap;
+}
+
+.log-run-id {
+  color: var(--text-secondary);
+  min-width: 80px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  opacity: 0.7;
 }
 
 .log-run-filter-container {

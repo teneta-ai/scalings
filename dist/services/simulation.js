@@ -4,7 +4,14 @@
 import { LocalTrafficPatternService } from './traffic.js';
 export class LocalSimulationService {
     constructor(trafficService) {
+        this.runCounter = 0;
         this.trafficService = trafficService || new LocalTrafficPatternService();
+    }
+    /** Generate a short unique run ID: counter + random hex suffix. */
+    generateRunId() {
+        this.runCounter++;
+        const suffix = Math.random().toString(16).slice(2, 8);
+        return `run-${this.runCounter}-${suffix}`;
     }
     /** Simple seeded PRNG (mulberry32). Returns a function that produces values in [0, 1). */
     createRng(seed) {
@@ -313,7 +320,8 @@ export class LocalSimulationService {
             });
         }
         const summary = this.calculateSummary(snapshots, simulation.tick_interval);
-        return { snapshots, summary };
+        const run_id = this.generateRunId();
+        return { run_id, snapshots, summary };
     }
     /**
      * Determines how overflow traffic is handled for a single tick.

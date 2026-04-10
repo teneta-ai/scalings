@@ -17,9 +17,17 @@ import { LocalTrafficPatternService } from './traffic.js';
 
 export class LocalSimulationService implements SimulationService {
   private trafficService: TrafficPatternService;
+  private runCounter: number = 0;
 
   constructor(trafficService?: TrafficPatternService) {
     this.trafficService = trafficService || new LocalTrafficPatternService();
+  }
+
+  /** Generate a short unique run ID: counter + random hex suffix. */
+  private generateRunId(): string {
+    this.runCounter++;
+    const suffix = Math.random().toString(16).slice(2, 8);
+    return `run-${this.runCounter}-${suffix}`;
   }
 
   /** Simple seeded PRNG (mulberry32). Returns a function that produces values in [0, 1). */
@@ -358,8 +366,9 @@ export class LocalSimulationService implements SimulationService {
     }
 
     const summary = this.calculateSummary(snapshots, simulation.tick_interval);
+    const run_id = this.generateRunId();
 
-    return { snapshots, summary };
+    return { run_id, snapshots, summary };
   }
 
   /**

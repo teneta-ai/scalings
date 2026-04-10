@@ -296,8 +296,9 @@ class App {
                 this.renderMultiRunLog(this.recordedRuns);
             }
             else {
+                this.renderSummaryRunId(result.run_id);
                 this.renderSummary(result.summary);
-                this.renderLog(result.snapshots, null);
+                this.renderLog(result.snapshots, result.run_id);
             }
         }
         catch (err) {
@@ -311,6 +312,22 @@ class App {
                 simBtn.textContent = 'Simulate';
                 simBtn.classList.remove('running');
             }
+        }
+    }
+    renderSummaryRunId(runId, runs) {
+        const el = document.getElementById('summary-run-id');
+        if (!el)
+            return;
+        if (runs && runs.length > 0) {
+            el.textContent = runs.map(r => `${r.name}: ${r.result.run_id}`).join('  |  ');
+            el.classList.remove('hidden');
+        }
+        else if (runId) {
+            el.textContent = `Run ID: ${runId}`;
+            el.classList.remove('hidden');
+        }
+        else {
+            el.classList.add('hidden');
         }
     }
     renderSummary(summary) {
@@ -378,6 +395,7 @@ class App {
         }
     }
     renderMultiRunSummary(runs) {
+        this.renderSummaryRunId(null, runs);
         const stats = [
             { id: 'stat-total-requests', extract: s => this.formatNumber(s.total_requests) },
             { id: 'stat-served', extract: s => this.formatNumber(s.total_served) },
@@ -451,20 +469,20 @@ class App {
             return { type: 'retry', category: 'traffic' };
         return { type: 'info', category: 'scale' };
     }
-    renderLog(snapshots, runName) {
+    renderLog(snapshots, runId) {
         const container = document.getElementById('log-entries');
         const countEl = document.getElementById('log-count');
         if (!container)
             return;
         container.innerHTML = '';
-        this.updateRunFilter(runName ? [runName] : []);
+        this.updateRunFilter([]);
         let eventCount = 0;
         for (const snap of snapshots) {
             if (snap.log_entries.length === 0)
                 continue;
             for (const msg of snap.log_entries) {
                 eventCount++;
-                this.appendLogLine(container, snap.time, msg, runName);
+                this.appendLogLine(container, snap.time, msg, null, runId);
             }
         }
         if (countEl)
@@ -486,7 +504,7 @@ class App {
                     continue;
                 for (const msg of snap.log_entries) {
                     eventCount++;
-                    this.appendLogLine(container, snap.time, msg, run.name);
+                    this.appendLogLine(container, snap.time, msg, run.name, run.result.run_id);
                 }
             }
         }
@@ -494,21 +512,24 @@ class App {
             countEl.textContent = `${eventCount} events`;
         this.applyLogFilters();
     }
-    appendLogLine(container, time, msg, runName) {
+    appendLogLine(container, time, msg, runLabel, runId = null) {
         const { type, category } = this.classifyLog(msg);
         const line = document.createElement('div');
         line.className = 'log-line';
         line.dataset.type = type;
         line.dataset.category = category;
-        if (runName)
-            line.dataset.run = runName;
+        if (runLabel)
+            line.dataset.run = runLabel;
+        if (runId)
+            line.dataset.runId = runId;
         const timeStr = time >= 3600
             ? `${Math.floor(time / 3600)}h${Math.floor((time % 3600) / 60).toString().padStart(2, '0')}m${(time % 60).toString().padStart(2, '0')}s`
             : time >= 60
                 ? `${Math.floor(time / 60)}m${(time % 60).toString().padStart(2, '0')}s`
                 : `${time}s`;
-        const runCol = runName ? `<span class="log-run">${runName}</span>` : '';
-        line.innerHTML = `${runCol}<span class="log-time">${timeStr}</span><span class="log-msg">${msg}</span>`;
+        const runCol = runLabel ? `<span class="log-run">${runLabel}</span>` : '';
+        const idCol = runId ? `<span class="log-run-id">${runId}</span>` : '';
+        line.innerHTML = `${runCol}${idCol}<span class="log-time">${timeStr}</span><span class="log-msg">${msg}</span>`;
         container.appendChild(line);
     }
     updateRunFilter(runNames) {
@@ -556,10 +577,12 @@ class App {
             if (el.style.display === 'none')
                 continue;
             const run = el.querySelector('.log-run')?.textContent || '';
+            const runId = el.querySelector('.log-run-id')?.textContent || '';
             const time = el.querySelector('.log-time')?.textContent || '';
             const msg = el.querySelector('.log-msg')?.textContent || '';
             const prefix = run ? `[${run}] ` : '';
-            parts.push(`${prefix}[${time}] ${msg}`);
+            const idPrefix = runId ? `[${runId}] ` : '';
+            parts.push(`${prefix}${idPrefix}[${time}] ${msg}`);
         }
         return parts.join('\n');
     }
