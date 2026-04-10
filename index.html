@@ -255,7 +255,7 @@
           <input type="checkbox" id="queue-enabled">
           <span class="queue-toggle-label">Queue Mode</span>
         </label>
-        <button class="tooltip-btn" data-tooltip="OLTP: requests exceeding capacity are dropped immediately. Queue: overflow is buffered up to max queue size and processed when capacity frees up. Requests are only dropped when the queue is full.">?</button>
+        <button class="tooltip-btn" data-tooltip="OLTP: requests exceeding capacity are dropped immediately. Queue: a single shared queue sits in front of all pods (like SQS, Kafka consumer group, or a buffering load balancer). Overflow is buffered up to max queue size and drained collectively by all serving pods. Requests are only dropped when the queue is full.">?</button>
       </div>
       <div id="queue-params" class="queue-params hidden">
         <div class="param-row">
