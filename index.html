@@ -249,17 +249,6 @@
       </div>
     </section>
 
-    <!-- CLIENT BEHAVIOR -->
-    <section id="client-section" class="card orange-border">
-      <h2>Client Behavior</h2>
-      <div class="param-row">
-        <label for="param-retry_rate" title="Fraction of dropped/expired requests that retry next tick (0-1). Models retry storms — when clients retry failed requests, they amplify the traffic load.">Retry Rate</label>
-        <input type="number" id="param-retry_rate" min="0" max="1" step="0.05" value="0" aria-label="Retry rate" title="Fraction of dropped/expired requests that retry next tick (0-1). 0.3 = 30% of failures retry.">
-        <span class="unit">ratio</span>
-        <button class="tooltip-btn" data-tooltip="Fraction of dropped or expired requests that re-enter as new traffic on the next tick. Models client retry behavior: when requests fail (dropped or expired), clients retry and amplify the traffic load, potentially causing cascading failures. 0 = no retries. 0.3 = 30% of failures retry.">?</button>
-      </div>
-    </section>
-
     <!-- MESSAGE BROKER (optional middleware) -->
     <section id="broker-section" class="card cyan-border">
       <div class="broker-toggle-row">
@@ -325,6 +314,8 @@
       <div id="advanced-content" class="collapsible-content collapsed">
         <fieldset>
           <legend>Advanced</legend>
+
+          <h3 class="param-subgroup">Service</h3>
 
           <div class="param-row">
             <label for="param-metric_observation_delay" title="Lag before autoscaler detects metric change">Metric Observation Delay</label>
@@ -407,6 +398,15 @@
             <input type="number" id="param-max_capacity_reduction" min="0" max="1" step="0.05" value="0" aria-label="Max capacity reduction" title="Maximum capacity reduction from saturation (0-1). 0.3 = up to 30% capacity loss at full saturation.">
             <span class="unit">ratio</span>
             <button class="tooltip-btn" data-tooltip="Maximum fraction of serving capacity lost due to saturation. E.g., 0.3 means capacity can drop to 70% of normal when pods are fully saturated. Creates a feedback loop: high utilization → slower processing → even higher utilization.">?</button>
+          </div>
+
+          <h3 class="param-subgroup">Client</h3>
+
+          <div class="param-row">
+            <label for="param-retry_rate" title="Fraction of dropped/expired requests that retry next tick (0-1). Models retry storms — when clients retry failed requests, they amplify the traffic load.">Retry Rate</label>
+            <input type="number" id="param-retry_rate" min="0" max="1" step="0.05" value="0" aria-label="Retry rate" title="Fraction of dropped/expired requests that retry next tick (0-1). 0.3 = 30% of failures retry.">
+            <span class="unit">ratio</span>
+            <button class="tooltip-btn" data-tooltip="Fraction of dropped or expired requests that re-enter as new traffic on the next tick. Models client retry behavior: when requests fail (dropped or expired), clients retry and amplify the traffic load, potentially causing cascading failures. 0 = no retries. 0.3 = 30% of failures retry.">?</button>
           </div>
         </fieldset>
       </div>

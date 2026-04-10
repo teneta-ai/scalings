@@ -274,11 +274,6 @@ header {
   padding: 0.75rem var(--card-padding);
 }
 
-.card.orange-border {
-  border-left: 3px solid var(--amber-dim);
-  padding: 0.75rem var(--card-padding);
-}
-
 /* --- Broker Mode Toggle --- */
 .broker-toggle-row {
   display: flex;
@@ -338,6 +333,22 @@ legend {
 
 .red-border legend {
   color: var(--red);
+}
+
+.param-subgroup {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin: 1rem 0 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.param-subgroup:first-of-type {
+  margin-top: 0.25rem;
 }
 
 /* --- Parameter Rows --- */
