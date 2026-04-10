@@ -20,6 +20,7 @@ export class UIControls {
         this.bindStepControls();
         this.bindFailureEventControls();
         this.bindBrokerToggle();
+        this.bindRetryDelayTooltip();
         this.showPatternParams(this.currentPattern);
         this.updatePreview();
     }
@@ -446,6 +447,25 @@ export class UIControls {
                 this.notifyChange();
             });
         }
+    }
+    bindRetryDelayTooltip() {
+        const delayInput = document.getElementById('param-retry_delay');
+        const tickInput = document.getElementById('sim-tick');
+        const tooltipBtn = delayInput?.parentElement?.querySelector('.tooltip-btn');
+        if (!delayInput || !tickInput || !tooltipBtn)
+            return;
+        const update = () => {
+            const delay = parseFloat(delayInput.value) || 0;
+            const tickInterval = parseFloat(tickInput.value) || 1;
+            const ticks = Math.max(1, Math.ceil(delay / tickInterval));
+            const tickNote = delay === 0
+                ? 'Currently: 1 tick (immediate).'
+                : `Currently: ${ticks} tick${ticks > 1 ? 's' : ''} at ${tickInterval}s interval.`;
+            tooltipBtn.dataset.tooltip = `Seconds between a request failing and the client retrying it. Models backoff behavior. 0 = retry on the very next tick (aggressive). Higher values spread retries over time, reducing the spike but prolonging the storm. ${tickNote}`;
+        };
+        delayInput.addEventListener('input', update);
+        tickInput.addEventListener('input', update);
+        update();
     }
     updateBrokerSizeUI(input) {
         const isUnlimited = parseFloat(input.value) === 0;

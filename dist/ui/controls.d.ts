@@ -35,6 +35,7 @@ export declare class UIControls {
     private bindCollapsibleSection;
     private bindFailureEventControls;
     private bindBrokerToggle;
+    private bindRetryDelayTooltip;
     private updateBrokerSizeUI;
     private getFailureEvents;
     private setFailureEvents;
