@@ -4,10 +4,7 @@ import { LocalExportService } from '../services/export.js';
 import {
   SimulationConfig,
   DEFAULT_CONFIG,
-  DEFAULT_SCALING,
-  DEFAULT_ADVANCED,
-  DEFAULT_SIMULATION,
-  DEFAULT_TRAFFIC,
+  DEFAULT_SERVICE,
 } from '../interfaces/types.js';
 
 const svc = new LocalExportService();
@@ -32,7 +29,7 @@ describe('ExportService — Kubernetes HPA', () => {
   it('includes correct replica bounds', () => {
     const config = makeConfig({
       platform: 'kubernetes-hpa',
-      scaling: { ...DEFAULT_SCALING, min_replicas: 3, max_replicas: 25 },
+      service: { ...DEFAULT_SERVICE, min_replicas: 3, max_replicas: 25 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes('minReplicas: 3'));
@@ -42,7 +39,7 @@ describe('ExportService — Kubernetes HPA', () => {
   it('includes utilization threshold', () => {
     const config = makeConfig({
       platform: 'kubernetes-hpa',
-      scaling: { ...DEFAULT_SCALING, scale_up_threshold: 80 },
+      service: { ...DEFAULT_SERVICE, scale_up_threshold: 80 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes('averageUtilization: 80'));
@@ -51,7 +48,7 @@ describe('ExportService — Kubernetes HPA', () => {
   it('includes scale behavior', () => {
     const config = makeConfig({
       platform: 'kubernetes-hpa',
-      advanced: { ...DEFAULT_ADVANCED, cooldown_scale_up: 90, cooldown_scale_down: 450 },
+      service: { ...DEFAULT_SERVICE, cooldown_scale_up: 90, cooldown_scale_down: 450 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes('stabilizationWindowSeconds: 90'));
@@ -61,7 +58,7 @@ describe('ExportService — Kubernetes HPA', () => {
   it('includes step size in policies', () => {
     const config = makeConfig({
       platform: 'kubernetes-hpa',
-      scaling: { ...DEFAULT_SCALING, scale_up_step: 3, scale_down_step: 2 },
+      service: { ...DEFAULT_SERVICE, scale_up_step: 3, scale_down_step: 2 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes('value: 3'));
@@ -85,7 +82,7 @@ describe('ExportService — AWS ASG', () => {
   it('includes correct min/max sizes', () => {
     const config = makeConfig({
       platform: 'aws-asg',
-      scaling: { ...DEFAULT_SCALING, min_replicas: 4, max_replicas: 40 },
+      service: { ...DEFAULT_SERVICE, min_replicas: 4, max_replicas: 40 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes("MinSize: '4'"));
@@ -102,7 +99,7 @@ describe('ExportService — AWS ASG', () => {
   it('includes CloudWatch alarms', () => {
     const config = makeConfig({
       platform: 'aws-asg',
-      scaling: { ...DEFAULT_SCALING, scale_up_threshold: 75, scale_down_threshold: 25 },
+      service: { ...DEFAULT_SERVICE, scale_up_threshold: 75, scale_down_threshold: 25 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes('HighUtilizationAlarm'));
@@ -128,7 +125,7 @@ describe('ExportService — GCP MIG', () => {
   it('includes correct replica bounds', () => {
     const config = makeConfig({
       platform: 'gcp-mig',
-      scaling: { ...DEFAULT_SCALING, min_replicas: 2, max_replicas: 30 },
+      service: { ...DEFAULT_SERVICE, min_replicas: 2, max_replicas: 30 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes('min_replicas    = 2'));
@@ -138,7 +135,7 @@ describe('ExportService — GCP MIG', () => {
   it('includes CPU utilization target as decimal', () => {
     const config = makeConfig({
       platform: 'gcp-mig',
-      scaling: { ...DEFAULT_SCALING, scale_up_threshold: 65 },
+      service: { ...DEFAULT_SERVICE, scale_up_threshold: 65 },
     });
     const target = svc.generate(config);
     assert.ok(target.content.includes('target = 0.65'));

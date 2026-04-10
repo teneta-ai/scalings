@@ -29,28 +29,28 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: my-app
-  minReplicas: ${config.scaling.min_replicas}
-  maxReplicas: ${config.scaling.max_replicas}
+  minReplicas: ${config.service.min_replicas}
+  maxReplicas: ${config.service.max_replicas}
   metrics:
   - type: Resource
     resource:
       name: cpu  # placeholder - replace with your actual bottleneck metric
       target:
         type: Utilization
-        averageUtilization: ${config.scaling.scale_up_threshold}
+        averageUtilization: ${config.service.scale_up_threshold}
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: ${config.advanced.cooldown_scale_up}
+      stabilizationWindowSeconds: ${config.service.cooldown_scale_up}
       policies:
       - type: Pods
-        value: ${config.scaling.scale_up_step}
-        periodSeconds: ${config.advanced.cooldown_scale_up}
+        value: ${config.service.scale_up_step}
+        periodSeconds: ${config.service.cooldown_scale_up}
     scaleDown:
-      stabilizationWindowSeconds: ${config.advanced.cooldown_scale_down}
+      stabilizationWindowSeconds: ${config.service.cooldown_scale_down}
       policies:
       - type: Pods
-        value: ${config.scaling.scale_down_step}
-        periodSeconds: ${config.advanced.cooldown_scale_down}`;
+        value: ${config.service.scale_down_step}
+        periodSeconds: ${config.service.cooldown_scale_down}`;
         return {
             platform: 'kubernetes-hpa',
             format: 'kubernetes-yaml',
@@ -66,10 +66,10 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      MinSize: '${config.scaling.min_replicas}'
-      MaxSize: '${config.scaling.max_replicas}'
-      DesiredCapacity: '${config.scaling.min_replicas}'
-      HealthCheckGracePeriod: ${config.scaling.startup_time}
+      MinSize: '${config.service.min_replicas}'
+      MaxSize: '${config.service.max_replicas}'
+      DesiredCapacity: '${config.service.min_replicas}'
+      HealthCheckGracePeriod: ${config.service.startup_time}
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -86,8 +86,8 @@ Resources:
       AdjustmentType: ChangeInCapacity
       StepAdjustments:
         - MetricIntervalLowerBound: 0
-          ScalingAdjustment: ${config.scaling.scale_up_step}
-      Cooldown: ${config.advanced.cooldown_scale_up}
+          ScalingAdjustment: ${config.service.scale_up_step}
+      Cooldown: ${config.service.cooldown_scale_up}
 
   ScaleDownPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -97,19 +97,19 @@ Resources:
       AdjustmentType: ChangeInCapacity
       StepAdjustments:
         - MetricIntervalUpperBound: 0
-          ScalingAdjustment: -${config.scaling.scale_down_step}
-      Cooldown: ${config.advanced.cooldown_scale_down}
+          ScalingAdjustment: -${config.service.scale_down_step}
+      Cooldown: ${config.service.cooldown_scale_down}
 
   HighUtilizationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: Scale up when utilization > ${config.scaling.scale_up_threshold}%
+      AlarmDescription: Scale up when utilization > ${config.service.scale_up_threshold}%
       MetricName: CPUUtilization  # Replace with your bottleneck metric
       Namespace: AWS/EC2
       Statistic: Average
-      Period: ${config.advanced.metric_observation_delay}
+      Period: ${config.service.metric_observation_delay}
       EvaluationPeriods: 1
-      Threshold: ${config.scaling.scale_up_threshold}
+      Threshold: ${config.service.scale_up_threshold}
       ComparisonOperator: GreaterThanThreshold
       AlarmActions:
         - !Ref ScaleUpPolicy
@@ -117,13 +117,13 @@ Resources:
   LowUtilizationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: Scale down when utilization < ${config.scaling.scale_down_threshold}%
+      AlarmDescription: Scale down when utilization < ${config.service.scale_down_threshold}%
       MetricName: CPUUtilization  # Replace with your bottleneck metric
       Namespace: AWS/EC2
       Statistic: Average
-      Period: ${config.advanced.metric_observation_delay}
+      Period: ${config.service.metric_observation_delay}
       EvaluationPeriods: 1
-      Threshold: ${config.scaling.scale_down_threshold}
+      Threshold: ${config.service.scale_down_threshold}
       ComparisonOperator: LessThanThreshold
       AlarmActions:
         - !Ref ScaleDownPolicy`;
@@ -143,19 +143,19 @@ resource "google_compute_autoscaler" "app_autoscaler" {
   target = google_compute_instance_group_manager.app_mig.id
 
   autoscaling_policy {
-    min_replicas    = ${config.scaling.min_replicas}
-    max_replicas    = ${config.scaling.max_replicas}
-    cooldown_period = ${config.advanced.cooldown_scale_up}
+    min_replicas    = ${config.service.min_replicas}
+    max_replicas    = ${config.service.max_replicas}
+    cooldown_period = ${config.service.cooldown_scale_up}
 
     cpu_utilization {
-      target = ${(config.scaling.scale_up_threshold / 100).toFixed(2)}  # Replace with your bottleneck metric
+      target = ${(config.service.scale_up_threshold / 100).toFixed(2)}  # Replace with your bottleneck metric
     }
 
     scale_in_control {
       max_scaled_in_replicas {
-        fixed = ${config.scaling.scale_down_step}
+        fixed = ${config.service.scale_down_step}
       }
-      time_window_sec = ${config.advanced.cooldown_scale_down}
+      time_window_sec = ${config.service.cooldown_scale_down}
     }
   }
 }
@@ -176,13 +176,13 @@ resource "google_compute_instance_group_manager" "app_mig" {
 
   auto_healing_policies {
     health_check      = google_compute_health_check.app_health.id
-    initial_delay_sec = ${config.scaling.startup_time}
+    initial_delay_sec = ${config.service.startup_time}
   }
 }
 
 resource "google_compute_health_check" "app_health" {
   name                = "my-app-health-check"
-  check_interval_sec  = ${Math.max(5, Math.floor(config.advanced.metric_observation_delay / 3))}
+  check_interval_sec  = ${Math.max(5, Math.floor(config.service.metric_observation_delay / 3))}
   timeout_sec         = 5
   healthy_threshold   = 2
   unhealthy_threshold = 3
@@ -204,34 +204,34 @@ resource "google_compute_health_check" "app_health" {
 # Adapt this to your specific autoscaling platform.
 
 autoscaling:
-  min_instances: ${config.scaling.min_replicas}
-  max_instances: ${config.scaling.max_replicas}
+  min_instances: ${config.service.min_replicas}
+  max_instances: ${config.service.max_replicas}
 
   scale_up:
-    threshold: ${config.scaling.scale_up_threshold}%  # Utilization threshold
-    step_size: ${config.scaling.scale_up_step}
-    cooldown: ${config.advanced.cooldown_scale_up}s
+    threshold: ${config.service.scale_up_threshold}%  # Utilization threshold
+    step_size: ${config.service.scale_up_step}
+    cooldown: ${config.service.cooldown_scale_up}s
 
   scale_down:
-    threshold: ${config.scaling.scale_down_threshold}%  # Utilization threshold
-    step_size: ${config.scaling.scale_down_step}
-    cooldown: ${config.advanced.cooldown_scale_down}s
+    threshold: ${config.service.scale_down_threshold}%  # Utilization threshold
+    step_size: ${config.service.scale_down_step}
+    cooldown: ${config.service.cooldown_scale_down}s
 
   instance:
-    startup_time: ${config.scaling.startup_time}s
-    capacity: ${config.scaling.capacity_per_replica} rps
-    graceful_shutdown: ${config.advanced.graceful_shutdown_time}s
+    startup_time: ${config.service.startup_time}s
+    capacity: ${config.service.capacity_per_replica} rps
+    graceful_shutdown: ${config.service.graceful_shutdown_time}s
 
   monitoring:
-    metric_delay: ${config.advanced.metric_observation_delay}s
-    observation_window: ${config.advanced.cooldown_scale_up}s
+    metric_delay: ${config.service.metric_observation_delay}s
+    observation_window: ${config.service.cooldown_scale_up}s
 
   infrastructure:
-    node_provisioning_time: ${config.advanced.node_provisioning_time}s
-    pods_per_node: ${config.advanced.cluster_node_capacity}
+    node_provisioning_time: ${config.service.node_provisioning_time}s
+    pods_per_node: ${config.service.cluster_node_capacity}
 
   cost:
-    per_instance_hour: $${config.advanced.cost_per_replica_hour}`;
+    per_instance_hour: $${config.service.cost_per_replica_hour}`;
         return {
             platform: 'custom',
             format: 'terraform',

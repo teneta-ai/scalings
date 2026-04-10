@@ -18,9 +18,12 @@ const sim = new LocalSimulationService(traffic);
 
 const config = {
   ...DEFAULT_CONFIG,
-  scaling: { ...DEFAULT_CONFIG.scaling, min_replicas: 5, max_replicas: 50 },
-  traffic: { pattern: 'spike', params: { base_rps: 200, spike_rps: 2000, spike_start: 60, spike_duration: 30 } },
-  queue: { enabled: true, max_size: 0 },  // unlimited queue
+  service: { ...DEFAULT_CONFIG.service, min_replicas: 5, max_replicas: 50 },
+  producer: {
+    traffic: { pattern: 'spike', params: { base_rps: 200, spike_rps: 2000, spike_start: 60, spike_duration: 30 } },
+  },
+  client: { max_retries: 0, retry_delay: 0 },
+  broker: { enabled: true, max_size: 0, request_timeout_ms: 0 },  // unlimited broker
 };
 
 const result = await sim.run(config);
@@ -53,7 +56,7 @@ npm run build      # compile TypeScript
 npm test           # build + run all tests (node:test)
 ```
 
-Tests must pass before committing. Currently 101 tests across simulation, config, export, and traffic services.
+Tests must pass before committing. Currently 116 tests across simulation, config, export, and traffic services.
 
 ## Architecture
 
@@ -74,7 +77,7 @@ src/
 ### Interface Separation
 - Define service contracts as interfaces in `types.ts`, implement in `services/`
 - UI depends on interfaces, not concrete classes
-- New features get their own config type (like `QueueConfig`), added to `SimulationConfig`
+- Config is organized around four entities: `ProducerConfig` (traffic), `ClientConfig` (retries/resilience), `BrokerConfig` (optional queue middleware), `ServiceConfig` (pod fleet, scaling, saturation, chaos)
 
 ### Simulation Extensibility
 - The simulation loop processes one tick at a time: failures → state updates → capacity → autoscaler → overflow → cost → snapshot
@@ -89,7 +92,7 @@ src/
 ### UI Controls
 - `getConfig()` / `setConfig()` symmetry — every field readable and writable
 - Reusable helpers: `bindCollapsibleSection()` for toggle sections, `getNumericValue()`/`setNumericValue()` for form fields
-- Presets merge with `{ ...DEFAULT_CONFIG, ...preset.config, section: { ...DEFAULT_CONFIG.section, ...preset.config.section } }` — always include all config sections
+- Presets merge with `{ ...DEFAULT_CONFIG, ...preset.config, service: { ...DEFAULT_CONFIG.service, ...preset.config.service } }` — always include all config sections
 
 ### Config Serialization
 - Every new config section needs: YAML serialization in `toYAML()`, validation in `validateX()`, and the section registered in `validateConfig()`
@@ -98,7 +101,7 @@ src/
 
 ## Adding a New Feature (Checklist)
 
-1. **types.ts**: Add config interface, add fields to `TickSnapshot`/`SimulationSummary` if needed, add defaults, update `SimulationConfig`
+1. **types.ts**: Add fields to `ProducerConfig`, `ClientConfig`, `BrokerConfig`, or `ServiceConfig` as appropriate. Add fields to `TickSnapshot`/`SimulationSummary` if needed. Update defaults.
 2. **simulation.ts**: Add logic to the tick loop or extract into a private method
 3. **index.html**: Add UI controls (inputs, toggles)
 4. **controls.ts**: Add `get`/`set` methods, bind events, include in `getConfig()`/`setConfig()`
@@ -107,6 +110,8 @@ src/
 7. **main.ts**: Add to `renderSummary()` if it has a summary stat
 8. **tests**: Add tests for simulation behavior, config round-trip, and edge cases
 9. **presets**: Update preset merging in `bindPresets()` if adding a new config section
+10. **llms.txt**: Update config example JSON, entity docs, and field descriptions
+11. **README.md**: Update feature list, config entity descriptions, and preset table if changed
 
 ## Testing Conventions
 

@@ -16,6 +16,8 @@ export declare class ChartRenderer {
     private buildPlugins;
     /** Builds the standard simulation datasets. Pass empty arrays for animated (progressive) mode. */
     private buildDatasets;
+    /** Enable the y2 axis if a wait time dataset is present. */
+    private enableY2IfNeeded;
     /** Builds a label -> index map for safe dataset access by name. */
     private indexDatasets;
     private getDatasetByLabel;

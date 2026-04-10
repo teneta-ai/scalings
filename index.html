@@ -93,6 +93,8 @@
           <button class="preset-btn" data-preset="Noisy Neighbor">Noisy Neighbor</button>
           <button class="preset-btn" data-preset="Step Migration">Step Migration</button>
           <button class="preset-btn" data-preset="Bottomless Queue">Bottomless Queue</button>
+          <button class="preset-btn" data-preset="Death Spiral (OLTP)">Death Spiral (OLTP)</button>
+          <button class="preset-btn" data-preset="Death Spiral (Queued)">Death Spiral (Queued)</button>
           <button class="preset-btn preset-btn--reset" id="btn-reset-defaults" title="Reset all parameters to HPA defaults">Reset to Defaults</button>
         </div>
       </section>
@@ -248,22 +250,28 @@
       </div>
     </section>
 
-    <!-- QUEUE MODE -->
-    <section id="queue-section" class="card cyan-border">
-      <div class="queue-toggle-row">
-        <label class="queue-mode-toggle" title="Switch between OLTP (drop on overflow) and Queue (buffer on overflow) processing patterns">
-          <input type="checkbox" id="queue-enabled">
-          <span class="queue-toggle-label">Queue Mode</span>
+    <!-- MESSAGE BROKER (optional middleware) -->
+    <section id="broker-section" class="card cyan-border">
+      <div class="broker-toggle-row">
+        <label class="broker-mode-toggle" title="Enable a message broker between producer and service (like SQS, Kafka, or a buffering load balancer)">
+          <input type="checkbox" id="broker-enabled">
+          <span class="broker-toggle-label">Message Broker</span>
         </label>
-        <button class="tooltip-btn" data-tooltip="OLTP: requests exceeding capacity are dropped immediately. Queue: a single shared queue sits in front of all pods (like SQS, Kafka consumer group, or a buffering load balancer). Overflow is buffered up to max queue size and drained collectively by all serving pods. Requests are only dropped when the queue is full.">?</button>
+        <button class="tooltip-btn" data-tooltip="Without broker: requests exceeding capacity are dropped immediately. With broker: a shared queue sits between producer and service (like SQS, Kafka consumer group, or a buffering load balancer). Overflow is buffered up to max size and drained by all serving pods. Requests are only dropped when the broker is full.">?</button>
       </div>
-      <div id="queue-params" class="queue-params hidden">
+      <div id="broker-params" class="broker-params hidden">
         <div class="param-row">
-          <label for="param-queue_max_size" title="Maximum number of requests that can be queued (0 = unlimited)">Max Queue Size</label>
-          <input type="number" id="param-queue_max_size" min="0" max="100000" value="1000" aria-label="Max queue size" title="Maximum requests to buffer. 0 = unlimited queue.">
-          <span class="unit" id="queue-size-unit">req</span>
-          <button id="queue-unlimited-btn" class="btn btn-small btn-secondary" title="Toggle unlimited queue (no drops)">Unlimited</button>
-          <button class="tooltip-btn" data-tooltip="Maximum number of requests that can wait in the queue. When the queue is full, new requests are dropped. Set to 0 for unlimited (no drops ever — pure backpressure).">?</button>
+          <label for="param-broker_max_size" title="Maximum number of requests that can be queued (0 = unlimited)">Max Queue Size</label>
+          <input type="number" id="param-broker_max_size" min="0" max="100000" value="1000" aria-label="Max queue size" title="Maximum requests to buffer. 0 = unlimited queue.">
+          <span class="unit" id="broker-size-unit">req</span>
+          <button id="broker-unlimited-btn" class="btn btn-small btn-secondary" title="Toggle unlimited queue (no drops)">Unlimited</button>
+          <button class="tooltip-btn" data-tooltip="Maximum number of requests that can wait in the broker. When full, new requests are dropped. Set to 0 for unlimited (no drops ever — pure backpressure).">?</button>
+        </div>
+        <div class="param-row">
+          <label for="param-request_timeout_ms" title="Maximum time (ms) a request can wait in the broker before being expired/dropped. Models client-side timeouts. 0 = no timeout.">Request Timeout</label>
+          <input type="number" id="param-request_timeout_ms" min="0" max="300000" step="1000" value="0" aria-label="Request timeout in milliseconds" title="Max wait time in milliseconds before a queued request is expired. Models client timeouts. 0 = no timeout.">
+          <span class="unit">ms</span>
+          <button class="tooltip-btn" data-tooltip="Maximum time a request waits in the broker before being expired (dropped). Models client-side timeouts — after this duration, the client has already given up. Expired requests may trigger retries. 0 = no timeout.">?</button>
         </div>
       </div>
     </section>
@@ -292,6 +300,9 @@
           Record Runs
         </label>
         <button id="btn-purge-runs" class="btn btn-small btn-purge hidden" title="Clear all recorded runs">Purge All</button>
+        <button id="btn-export-runs" class="btn btn-small hidden" title="Export recorded runs as JSON">Export Runs</button>
+        <button id="btn-import-runs" class="btn btn-small" title="Import recorded runs from JSON">Import Runs</button>
+        <input type="file" id="import-runs-input" accept=".json" class="hidden" aria-hidden="true">
       </div>
       <div class="progress-bar"><div id="sim-progress" class="progress-fill"></div></div>
     </section>
@@ -302,78 +313,115 @@
         <span class="toggle-arrow">&#9654;</span> Advanced Parameters
       </button>
       <div id="advanced-content" class="collapsible-content collapsed">
-        <fieldset>
-          <legend>Advanced</legend>
+        <div class="advanced-columns">
+          <fieldset class="advanced-col">
+            <legend>Service</legend>
 
-          <div class="param-row">
-            <label for="param-metric_observation_delay" title="Lag before autoscaler detects metric change">Metric Observation Delay</label>
-            <input type="number" id="param-metric_observation_delay" min="0" max="120" value="15" aria-label="Metric observation delay value" title="Lag between real metric change and autoscaler detecting it">
-            <span class="unit">s</span>
-            <button class="tooltip-btn" data-tooltip="Lag (seconds) between a real metric change and the autoscaler detecting it. Simulates HPA scrape interval or CloudWatch delay.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-metric_observation_delay" title="Lag before autoscaler detects metric change">Metric Observation Delay</label>
+              <input type="number" id="param-metric_observation_delay" min="0" max="120" value="15" aria-label="Metric observation delay value" title="Lag between real metric change and autoscaler detecting it">
+              <span class="unit">s</span>
+              <button class="tooltip-btn" data-tooltip="Lag (seconds) between a real metric change and the autoscaler detecting it. Simulates HPA scrape interval or CloudWatch delay.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-cooldown_scale_up" title="Cooldown after scale-up">Cooldown (Scale-Up)</label>
-            <input type="number" id="param-cooldown_scale_up" min="0" max="600" value="60" aria-label="Scale-up cooldown value" title="Seconds after a scale-up before another is allowed">
-            <span class="unit">s</span>
-            <button class="tooltip-btn" data-tooltip="Seconds after a scale-up event before another scale-up is allowed. Prevents thrashing.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-cooldown_scale_up" title="Cooldown after scale-up">Cooldown (Scale-Up)</label>
+              <input type="number" id="param-cooldown_scale_up" min="0" max="600" value="60" aria-label="Scale-up cooldown value" title="Seconds after a scale-up before another is allowed">
+              <span class="unit">s</span>
+              <button class="tooltip-btn" data-tooltip="Seconds after a scale-up event before another scale-up is allowed. Prevents thrashing.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-cooldown_scale_down" title="Cooldown after scale-down">Cooldown (Scale-Down)</label>
-            <input type="number" id="param-cooldown_scale_down" min="0" max="600" value="300" aria-label="Scale-down cooldown value" title="Seconds after a scale-down before another is allowed">
-            <span class="unit">s</span>
-            <button class="tooltip-btn" data-tooltip="Seconds after a scale-down event before another scale-down is allowed. Usually longer than scale-up cooldown.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-cooldown_scale_down" title="Cooldown after scale-down">Cooldown (Scale-Down)</label>
+              <input type="number" id="param-cooldown_scale_down" min="0" max="600" value="300" aria-label="Scale-down cooldown value" title="Seconds after a scale-down before another is allowed">
+              <span class="unit">s</span>
+              <button class="tooltip-btn" data-tooltip="Seconds after a scale-down event before another scale-down is allowed. Usually longer than scale-up cooldown.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-node_provisioning_time" title="Time to spin up a new worker node">Node Provisioning Time</label>
-            <input type="number" id="param-node_provisioning_time" min="0" max="600" value="120" aria-label="Node provisioning time value" title="Time for cloud provider to spin up a new node">
-            <span class="unit">s</span>
-            <button class="tooltip-btn" data-tooltip="Time (seconds) for the cloud provider to spin up a new worker node when cluster is at capacity. Set to 0 if nodes are pre-provisioned.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-node_provisioning_time" title="Time to spin up a new worker node">Node Provisioning Time</label>
+              <input type="number" id="param-node_provisioning_time" min="0" max="600" value="120" aria-label="Node provisioning time value" title="Time for cloud provider to spin up a new node">
+              <span class="unit">s</span>
+              <button class="tooltip-btn" data-tooltip="Time (seconds) for the cloud provider to spin up a new worker node when cluster is at capacity. Set to 0 if nodes are pre-provisioned.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-cluster_node_capacity" title="Max nodes in cluster">Max Nodes</label>
-            <input type="number" id="param-cluster_node_capacity" min="1" max="1000" value="20" aria-label="Max nodes in cluster" title="Maximum number of nodes in the cluster">
-            <span class="unit"></span>
-            <button class="tooltip-btn" data-tooltip="Maximum number of worker nodes the cluster can have.">?</button>
-          </div>
-          <div class="param-row">
-            <label for="param-pods_per_node" title="Max pods per node">Pods per Node</label>
-            <input type="number" id="param-pods_per_node" min="1" max="500" value="10" aria-label="Pods per node" title="Maximum pods that fit on a single node">
-            <span class="unit"></span>
-            <button class="tooltip-btn" data-tooltip="How many pods can fit on a single node before a new node needs to be provisioned.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-cluster_node_capacity" title="Max nodes in cluster">Max Nodes</label>
+              <input type="number" id="param-cluster_node_capacity" min="1" max="1000" value="20" aria-label="Max nodes in cluster" title="Maximum number of nodes in the cluster">
+              <span class="unit"></span>
+              <button class="tooltip-btn" data-tooltip="Maximum number of worker nodes the cluster can have.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-graceful_shutdown_time" title="Time a terminating pod keeps serving">Graceful Shutdown Time</label>
-            <input type="number" id="param-graceful_shutdown_time" min="0" max="120" value="10" aria-label="Graceful shutdown time value" title="Seconds a terminating pod continues serving during scale-down">
-            <span class="unit">s</span>
-            <button class="tooltip-btn" data-tooltip="Seconds a terminating pod continues serving traffic during scale-down before fully stopping.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-pods_per_node" title="Max pods per node">Pods per Node</label>
+              <input type="number" id="param-pods_per_node" min="1" max="500" value="10" aria-label="Pods per node" title="Maximum pods that fit on a single node">
+              <span class="unit"></span>
+              <button class="tooltip-btn" data-tooltip="How many pods can fit on a single node before a new node needs to be provisioned.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-scale_up_step" title="Pods to add per scale-up event">Scale-Up Step Size</label>
-            <input type="number" id="param-scale_up_step" min="1" max="50" value="1" aria-label="Scale-up step value" title="Number of pods to add per scale-up event">
-            <span class="unit"></span>
-            <button class="tooltip-btn" data-tooltip="Number of pods to add per scale-up event. Higher values scale faster but may overshoot.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-graceful_shutdown_time" title="Time a terminating pod keeps serving">Graceful Shutdown Time</label>
+              <input type="number" id="param-graceful_shutdown_time" min="0" max="120" value="10" aria-label="Graceful shutdown time value" title="Seconds a terminating pod continues serving during scale-down">
+              <span class="unit">s</span>
+              <button class="tooltip-btn" data-tooltip="Seconds a terminating pod continues serving traffic during scale-down before fully stopping.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-scale_down_step" title="Pods to remove per scale-down event">Scale-Down Step Size</label>
-            <input type="number" id="param-scale_down_step" min="1" max="50" value="1" aria-label="Scale-down step value" title="Number of pods to remove per scale-down event">
-            <span class="unit"></span>
-            <button class="tooltip-btn" data-tooltip="Number of pods to remove per scale-down event. Higher values scale down faster.">?</button>
-          </div>
+            <div class="param-row">
+              <label for="param-scale_up_step" title="Pods to add per scale-up event">Scale-Up Step Size</label>
+              <input type="number" id="param-scale_up_step" min="1" max="50" value="1" aria-label="Scale-up step value" title="Number of pods to add per scale-up event">
+              <span class="unit"></span>
+              <button class="tooltip-btn" data-tooltip="Number of pods to add per scale-up event. Higher values scale faster but may overshoot.">?</button>
+            </div>
 
-          <div class="param-row">
-            <label for="param-cost_per_replica_hour" title="Cost per pod per hour in USD">Cost per <span class="pod-label">Pod</span>/Hour</label>
-            <input type="number" id="param-cost_per_replica_hour" min="0" max="10" step="0.01" value="0.05" aria-label="Cost per replica hour value" title="Cost per pod per hour for cost estimation">
-            <span class="unit">$/h</span>
-            <button class="tooltip-btn" data-tooltip="Cost per pod/instance per hour in USD. Used to estimate total simulation cost.">?</button>
-          </div>
-        </fieldset>
+            <div class="param-row">
+              <label for="param-scale_down_step" title="Pods to remove per scale-down event">Scale-Down Step Size</label>
+              <input type="number" id="param-scale_down_step" min="1" max="50" value="1" aria-label="Scale-down step value" title="Number of pods to remove per scale-down event">
+              <span class="unit"></span>
+              <button class="tooltip-btn" data-tooltip="Number of pods to remove per scale-down event. Higher values scale down faster.">?</button>
+            </div>
+
+            <div class="param-row">
+              <label for="param-cost_per_replica_hour" title="Cost per pod per hour in USD">Cost per <span class="pod-label">Pod</span>/Hour</label>
+              <input type="number" id="param-cost_per_replica_hour" min="0" max="10" step="0.01" value="0.05" aria-label="Cost per replica hour value" title="Cost per pod per hour for cost estimation">
+              <span class="unit">$/h</span>
+              <button class="tooltip-btn" data-tooltip="Cost per pod/instance per hour in USD. Used to estimate total simulation cost.">?</button>
+            </div>
+
+            <div class="param-group" aria-label="Saturation">
+              <span class="param-group-label">Saturation</span>
+              <div class="param-row">
+                <label for="param-saturation_threshold" title="Utilization percentage at which capacity starts degrading. Models CPU saturation, memory pressure, GC pauses, and thread contention. 0 = no degradation.">Threshold</label>
+                <input type="number" id="param-saturation_threshold" min="0" max="100" value="0" aria-label="Saturation threshold" title="Utilization % at which capacity starts degrading. Degradation reaches maximum at 100% utilization. 0 = disabled.">
+                <span class="unit">%</span>
+                <button class="tooltip-btn" data-tooltip="When pod utilization exceeds this percentage, the service's capacity degrades linearly (simulating CPU saturation, GC pauses, thread contention). Degradation reaches the maximum at 100% utilization. Works in both OLTP and queue modes. Set to 0 to disable.">?</button>
+              </div>
+              <div class="param-row">
+                <label for="param-max_capacity_reduction" title="Maximum fraction of capacity lost due to saturation (0-1). For example, 0.3 means up to 30% capacity loss when pods are fully saturated.">Max Reduction</label>
+                <input type="number" id="param-max_capacity_reduction" min="0" max="1" step="0.05" value="0" aria-label="Max capacity reduction" title="Maximum capacity reduction from saturation (0-1). 0.3 = up to 30% capacity loss at full saturation.">
+                <span class="unit">ratio</span>
+                <button class="tooltip-btn" data-tooltip="Maximum fraction of serving capacity lost due to saturation. E.g., 0.3 means capacity can drop to 70% of normal when pods are fully saturated. Creates a feedback loop: high utilization → slower processing → even higher utilization.">?</button>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="advanced-col">
+            <legend>Client</legend>
+
+            <div class="param-row">
+              <label for="param-max_retries" title="Maximum retry attempts per failed request. 0 = no retries.">Max Retries</label>
+              <input type="number" id="param-max_retries" min="0" max="10" value="0" aria-label="Max retries" title="Maximum number of times a failed request will be retried. 0 = no retries. 3 = up to 3 retry attempts.">
+              <span class="unit"></span>
+              <button class="tooltip-btn" data-tooltip="Maximum number of retry attempts per failed request. When a request is dropped or expires, the client retries it up to this many times. Models retry storms: retries amplify traffic and can cause cascading failures. 0 = disabled.">?</button>
+            </div>
+
+            <div class="param-row">
+              <label for="param-retry_delay" title="Seconds between a failure and the retry attempt. 0 = retry on next tick.">Retry Delay</label>
+              <input type="number" id="param-retry_delay" min="0" max="60" value="0" aria-label="Retry delay" title="Seconds a client waits before retrying a failed request. 0 = immediate (next tick).">
+              <span class="unit">s</span>
+              <button class="tooltip-btn" data-tooltip="Seconds between a request failing and the client retrying it. Models backoff behavior. 0 = retry on the very next tick (aggressive). Higher values spread retries over time, reducing the spike but prolonging the storm.">?</button>
+            </div>
+          </fieldset>
+        </div>
       </div>
     </section>
 
@@ -450,6 +498,18 @@
             <div class="stat-label">Peak Queue Depth</div>
             <div class="stat-value" id="stat-peak-queue">-</div>
           </div>
+          <div class="stat-card queue-stat hidden" id="stat-card-peak-wait">
+            <div class="stat-label">Peak Wait Time</div>
+            <div class="stat-value" id="stat-peak-wait">-</div>
+          </div>
+          <div class="stat-card queue-stat hidden" id="stat-card-expired">
+            <div class="stat-label">Expired (Timeout)</div>
+            <div class="stat-value" id="stat-expired">-</div>
+          </div>
+          <div class="stat-card queue-stat hidden" id="stat-card-retries">
+            <div class="stat-label">Retry Traffic</div>
+            <div class="stat-value" id="stat-retries">-</div>
+          </div>
           <div class="stat-card">
             <div class="stat-label">Under-provisioned</div>
             <div class="stat-value" id="stat-underprov-time">-</div>
@@ -485,6 +545,12 @@
               <label class="log-filter-label">
                 <input type="checkbox" id="log-filter-traffic" checked> Traffic drops
               </label>
+              <span id="log-run-filter-container" class="log-run-filter-container hidden">
+                <label for="log-run-filter" class="log-filter-label">Run:</label>
+                <select id="log-run-filter" class="log-run-select" title="Filter log entries by simulation run">
+                  <option value="all">All Runs</option>
+                </select>
+              </span>
               <span class="log-toolbar-sep"></span>
               <button id="btn-log-copy" class="btn btn-small log-action-btn" title="Copy log to clipboard">Copy All</button>
               <button id="btn-log-download" class="btn btn-small log-action-btn" title="Download log as .txt file">Download</button>

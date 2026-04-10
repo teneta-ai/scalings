@@ -5,7 +5,19 @@ export interface SimulationParams {
     duration: number;
     tick_interval: number;
 }
-export interface ScalingParams {
+export interface ProducerConfig {
+    traffic: TrafficConfig;
+}
+export interface ClientConfig {
+    max_retries: number;
+    retry_delay: number;
+}
+export interface BrokerConfig {
+    enabled: boolean;
+    max_size: number;
+    request_timeout_ms: number;
+}
+export interface ServiceConfig {
     min_replicas: number;
     max_replicas: number;
     scale_up_threshold: number;
@@ -14,8 +26,6 @@ export interface ScalingParams {
     startup_time: number;
     scale_up_step: number;
     scale_down_step: number;
-}
-export interface AdvancedParams {
     metric_observation_delay: number;
     cooldown_scale_up: number;
     cooldown_scale_down: number;
@@ -24,19 +34,15 @@ export interface AdvancedParams {
     pods_per_node: number;
     graceful_shutdown_time: number;
     cost_per_replica_hour: number;
-}
-export interface QueueConfig {
-    enabled: boolean;
-    max_size: number;
+    saturation_threshold: number;
+    max_capacity_reduction: number;
+    pod_failure_rate: number;
+    random_seed: number;
+    failure_events: FailureEvent[];
 }
 export interface FailureEvent {
     time: number;
     count: number;
-}
-export interface ChaosConfig {
-    pod_failure_rate: number;
-    random_seed: number;
-    failure_events: FailureEvent[];
 }
 export interface SteadyParams {
     rps: number;
@@ -81,11 +87,10 @@ export interface SimulationConfig {
     description?: string;
     platform: Platform;
     simulation: SimulationParams;
-    scaling: ScalingParams;
-    advanced: AdvancedParams;
-    chaos: ChaosConfig;
-    traffic: TrafficConfig;
-    queue: QueueConfig;
+    producer: ProducerConfig;
+    client: ClientConfig;
+    broker: BrokerConfig;
+    service: ServiceConfig;
 }
 export interface TargetConfig {
     platform: Platform;
@@ -110,6 +115,10 @@ export interface TickSnapshot {
     served_requests: number;
     dropped_requests: number;
     queue_depth: number;
+    queue_wait_time_ms: number;
+    expired_requests: number;
+    retry_requests: number;
+    effective_capacity_rps: number;
     utilization: number;
     delayed_utilization: number;
     estimated_cost: number;
@@ -128,6 +137,10 @@ export interface SimulationSummary {
     peak_pod_count: number;
     min_pod_count: number;
     peak_queue_depth: number;
+    avg_queue_wait_time_ms: number;
+    peak_queue_wait_time_ms: number;
+    total_expired: number;
+    total_retries: number;
     time_under_provisioned_seconds: number;
     time_under_provisioned_percent: number;
     time_to_recover_seconds: number | null;
@@ -156,11 +169,11 @@ export interface PresetScenario {
     description: string;
     config: Partial<SimulationConfig>;
 }
-export declare const DEFAULT_SCALING: ScalingParams;
-export declare const DEFAULT_ADVANCED: AdvancedParams;
-export declare const DEFAULT_QUEUE: QueueConfig;
-export declare const DEFAULT_CHAOS: ChaosConfig;
 export declare const DEFAULT_SIMULATION: SimulationParams;
 export declare const DEFAULT_TRAFFIC: TrafficConfig;
+export declare const DEFAULT_PRODUCER: ProducerConfig;
+export declare const DEFAULT_CLIENT: ClientConfig;
+export declare const DEFAULT_BROKER: BrokerConfig;
+export declare const DEFAULT_SERVICE: ServiceConfig;
 export declare const DEFAULT_CONFIG: SimulationConfig;
 export declare const PRESET_SCENARIOS: PresetScenario[];

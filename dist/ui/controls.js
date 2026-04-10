@@ -19,7 +19,8 @@ export class UIControls {
         this.bindPlatformSelector();
         this.bindStepControls();
         this.bindFailureEventControls();
-        this.bindQueueToggle();
+        this.bindBrokerToggle();
+        this.bindRetryDelayTooltip();
         this.showPatternParams(this.currentPattern);
         this.updatePreview();
     }
@@ -33,40 +34,17 @@ export class UIControls {
     // --- Read form state into config ---
     getConfig() {
         const config = {
-            version: 1,
+            version: 2,
             name: this.getInputValue('sim-name') || 'Untitled Simulation',
             platform: this.getSelectValue('platform-select'),
             simulation: {
                 duration: this.getNumericValue('sim-duration', DEFAULT_CONFIG.simulation.duration),
                 tick_interval: this.getNumericValue('sim-tick', DEFAULT_CONFIG.simulation.tick_interval),
             },
-            scaling: {
-                min_replicas: this.getNumericValue('param-min_replicas', DEFAULT_CONFIG.scaling.min_replicas),
-                max_replicas: this.getNumericValue('param-max_replicas', DEFAULT_CONFIG.scaling.max_replicas),
-                scale_up_threshold: this.getNumericValue('param-scale_up_threshold', DEFAULT_CONFIG.scaling.scale_up_threshold),
-                scale_down_threshold: this.getNumericValue('param-scale_down_threshold', DEFAULT_CONFIG.scaling.scale_down_threshold),
-                capacity_per_replica: this.getNumericValue('param-capacity_per_replica', DEFAULT_CONFIG.scaling.capacity_per_replica),
-                startup_time: this.getNumericValue('param-startup_time', DEFAULT_CONFIG.scaling.startup_time),
-                scale_up_step: this.getNumericValue('param-scale_up_step', DEFAULT_CONFIG.scaling.scale_up_step),
-                scale_down_step: this.getNumericValue('param-scale_down_step', DEFAULT_CONFIG.scaling.scale_down_step),
-            },
-            advanced: {
-                metric_observation_delay: this.getNumericValue('param-metric_observation_delay', DEFAULT_CONFIG.advanced.metric_observation_delay),
-                cooldown_scale_up: this.getNumericValue('param-cooldown_scale_up', DEFAULT_CONFIG.advanced.cooldown_scale_up),
-                cooldown_scale_down: this.getNumericValue('param-cooldown_scale_down', DEFAULT_CONFIG.advanced.cooldown_scale_down),
-                node_provisioning_time: this.getNumericValue('param-node_provisioning_time', DEFAULT_CONFIG.advanced.node_provisioning_time),
-                cluster_node_capacity: this.getNumericValue('param-cluster_node_capacity', DEFAULT_CONFIG.advanced.cluster_node_capacity),
-                pods_per_node: this.getNumericValue('param-pods_per_node', DEFAULT_CONFIG.advanced.pods_per_node),
-                graceful_shutdown_time: this.getNumericValue('param-graceful_shutdown_time', DEFAULT_CONFIG.advanced.graceful_shutdown_time),
-                cost_per_replica_hour: this.getNumericValue('param-cost_per_replica_hour', DEFAULT_CONFIG.advanced.cost_per_replica_hour),
-            },
-            chaos: {
-                pod_failure_rate: this.getNumericValue('param-pod_failure_rate', DEFAULT_CONFIG.chaos.pod_failure_rate),
-                random_seed: this.getNumericValue('param-random_seed', DEFAULT_CONFIG.chaos.random_seed),
-                failure_events: this.getFailureEvents(),
-            },
-            traffic: this.getTrafficConfig(),
-            queue: this.getQueueConfig(),
+            producer: this.getProducerConfig(),
+            client: this.getClientConfig(),
+            broker: this.getBrokerConfig(),
+            service: this.getServiceConfig(),
         };
         return config;
     }
@@ -77,33 +55,115 @@ export class UIControls {
         // Simulation params
         this.setNumericValue('sim-duration', config.simulation.duration);
         this.setNumericValue('sim-tick', config.simulation.tick_interval);
-        // Scaling params
-        this.setNumericValue('param-min_replicas', config.scaling.min_replicas);
-        this.setNumericValue('param-max_replicas', config.scaling.max_replicas);
-        this.setNumericValue('param-scale_up_threshold', config.scaling.scale_up_threshold);
-        this.setNumericValue('param-scale_down_threshold', config.scaling.scale_down_threshold);
-        this.setNumericValue('param-capacity_per_replica', config.scaling.capacity_per_replica);
-        this.setNumericValue('param-startup_time', config.scaling.startup_time);
-        this.setNumericValue('param-scale_up_step', config.scaling.scale_up_step);
-        this.setNumericValue('param-scale_down_step', config.scaling.scale_down_step);
-        // Advanced params
-        this.setNumericValue('param-metric_observation_delay', config.advanced.metric_observation_delay);
-        this.setNumericValue('param-cooldown_scale_up', config.advanced.cooldown_scale_up);
-        this.setNumericValue('param-cooldown_scale_down', config.advanced.cooldown_scale_down);
-        this.setNumericValue('param-node_provisioning_time', config.advanced.node_provisioning_time);
-        this.setNumericValue('param-cluster_node_capacity', config.advanced.cluster_node_capacity);
-        this.setNumericValue('param-pods_per_node', config.advanced.pods_per_node);
-        this.setNumericValue('param-graceful_shutdown_time', config.advanced.graceful_shutdown_time);
-        this.setNumericValue('param-cost_per_replica_hour', config.advanced.cost_per_replica_hour);
-        // Chaos
-        this.setNumericValue('param-pod_failure_rate', config.chaos.pod_failure_rate);
-        this.setNumericValue('param-random_seed', config.chaos.random_seed);
-        this.setFailureEvents(config.chaos.failure_events);
-        // Traffic
-        this.setTrafficConfig(config.traffic);
-        // Queue
-        this.setQueueConfig(config.queue);
+        // Producer
+        this.setProducerConfig(config.producer);
+        // Client
+        this.setClientConfig(config.client);
+        // Broker
+        this.setBrokerConfig(config.broker);
+        // Service
+        this.setServiceConfig(config.service);
         this.updatePreview();
+    }
+    // --- Producer config helpers ---
+    getProducerConfig() {
+        return {
+            traffic: this.getTrafficConfig(),
+        };
+    }
+    setProducerConfig(producer) {
+        this.setTrafficConfig(producer.traffic);
+    }
+    // --- Client config helpers ---
+    getClientConfig() {
+        return {
+            max_retries: this.getNumericValue('param-max_retries', DEFAULT_CONFIG.client.max_retries),
+            retry_delay: this.getNumericValue('param-retry_delay', DEFAULT_CONFIG.client.retry_delay),
+        };
+    }
+    setClientConfig(client) {
+        this.setNumericValue('param-max_retries', client.max_retries);
+        this.setNumericValue('param-retry_delay', client.retry_delay);
+    }
+    // --- Broker config helpers ---
+    getBrokerConfig() {
+        const toggle = document.getElementById('broker-enabled');
+        return {
+            enabled: toggle ? toggle.checked : false,
+            max_size: this.getNumericValue('param-broker_max_size', DEFAULT_CONFIG.broker.max_size),
+            request_timeout_ms: this.getNumericValue('param-request_timeout_ms', DEFAULT_CONFIG.broker.request_timeout_ms),
+        };
+    }
+    setBrokerConfig(broker) {
+        const toggle = document.getElementById('broker-enabled');
+        const params = document.getElementById('broker-params');
+        if (toggle) {
+            toggle.checked = broker.enabled;
+            if (params)
+                params.classList.toggle('hidden', !broker.enabled);
+        }
+        this.setNumericValue('param-broker_max_size', broker.max_size);
+        this.setNumericValue('param-request_timeout_ms', broker.request_timeout_ms);
+        const maxSizeInput = document.getElementById('param-broker_max_size');
+        if (maxSizeInput)
+            this.updateBrokerSizeUI(maxSizeInput);
+    }
+    // --- Service config helpers ---
+    getServiceConfig() {
+        return {
+            // Basic scaling
+            min_replicas: this.getNumericValue('param-min_replicas', DEFAULT_CONFIG.service.min_replicas),
+            max_replicas: this.getNumericValue('param-max_replicas', DEFAULT_CONFIG.service.max_replicas),
+            scale_up_threshold: this.getNumericValue('param-scale_up_threshold', DEFAULT_CONFIG.service.scale_up_threshold),
+            scale_down_threshold: this.getNumericValue('param-scale_down_threshold', DEFAULT_CONFIG.service.scale_down_threshold),
+            capacity_per_replica: this.getNumericValue('param-capacity_per_replica', DEFAULT_CONFIG.service.capacity_per_replica),
+            startup_time: this.getNumericValue('param-startup_time', DEFAULT_CONFIG.service.startup_time),
+            scale_up_step: this.getNumericValue('param-scale_up_step', DEFAULT_CONFIG.service.scale_up_step),
+            scale_down_step: this.getNumericValue('param-scale_down_step', DEFAULT_CONFIG.service.scale_down_step),
+            // Advanced
+            metric_observation_delay: this.getNumericValue('param-metric_observation_delay', DEFAULT_CONFIG.service.metric_observation_delay),
+            cooldown_scale_up: this.getNumericValue('param-cooldown_scale_up', DEFAULT_CONFIG.service.cooldown_scale_up),
+            cooldown_scale_down: this.getNumericValue('param-cooldown_scale_down', DEFAULT_CONFIG.service.cooldown_scale_down),
+            node_provisioning_time: this.getNumericValue('param-node_provisioning_time', DEFAULT_CONFIG.service.node_provisioning_time),
+            cluster_node_capacity: this.getNumericValue('param-cluster_node_capacity', DEFAULT_CONFIG.service.cluster_node_capacity),
+            pods_per_node: this.getNumericValue('param-pods_per_node', DEFAULT_CONFIG.service.pods_per_node),
+            graceful_shutdown_time: this.getNumericValue('param-graceful_shutdown_time', DEFAULT_CONFIG.service.graceful_shutdown_time),
+            cost_per_replica_hour: this.getNumericValue('param-cost_per_replica_hour', DEFAULT_CONFIG.service.cost_per_replica_hour),
+            // Saturation
+            saturation_threshold: this.getNumericValue('param-saturation_threshold', DEFAULT_CONFIG.service.saturation_threshold),
+            max_capacity_reduction: this.getNumericValue('param-max_capacity_reduction', DEFAULT_CONFIG.service.max_capacity_reduction),
+            // Chaos
+            pod_failure_rate: this.getNumericValue('param-pod_failure_rate', DEFAULT_CONFIG.service.pod_failure_rate),
+            random_seed: this.getNumericValue('param-random_seed', DEFAULT_CONFIG.service.random_seed),
+            failure_events: this.getFailureEvents(),
+        };
+    }
+    setServiceConfig(service) {
+        // Basic scaling
+        this.setNumericValue('param-min_replicas', service.min_replicas);
+        this.setNumericValue('param-max_replicas', service.max_replicas);
+        this.setNumericValue('param-scale_up_threshold', service.scale_up_threshold);
+        this.setNumericValue('param-scale_down_threshold', service.scale_down_threshold);
+        this.setNumericValue('param-capacity_per_replica', service.capacity_per_replica);
+        this.setNumericValue('param-startup_time', service.startup_time);
+        this.setNumericValue('param-scale_up_step', service.scale_up_step);
+        this.setNumericValue('param-scale_down_step', service.scale_down_step);
+        // Advanced
+        this.setNumericValue('param-metric_observation_delay', service.metric_observation_delay);
+        this.setNumericValue('param-cooldown_scale_up', service.cooldown_scale_up);
+        this.setNumericValue('param-cooldown_scale_down', service.cooldown_scale_down);
+        this.setNumericValue('param-node_provisioning_time', service.node_provisioning_time);
+        this.setNumericValue('param-cluster_node_capacity', service.cluster_node_capacity);
+        this.setNumericValue('param-pods_per_node', service.pods_per_node);
+        this.setNumericValue('param-graceful_shutdown_time', service.graceful_shutdown_time);
+        this.setNumericValue('param-cost_per_replica_hour', service.cost_per_replica_hour);
+        // Saturation
+        this.setNumericValue('param-saturation_threshold', service.saturation_threshold);
+        this.setNumericValue('param-max_capacity_reduction', service.max_capacity_reduction);
+        // Chaos
+        this.setNumericValue('param-pod_failure_rate', service.pod_failure_rate);
+        this.setNumericValue('param-random_seed', service.random_seed);
+        this.setFailureEvents(service.failure_events);
     }
     // --- Traffic config helpers ---
     getTrafficConfig() {
@@ -138,7 +198,7 @@ export class UIControls {
                 params = { series: this.getCustomSeries() };
                 break;
             default:
-                params = DEFAULT_CONFIG.traffic.params;
+                params = DEFAULT_CONFIG.producer.traffic.params;
         }
         return { pattern, params };
     }
@@ -295,12 +355,11 @@ export class UIControls {
                     const fullConfig = {
                         ...DEFAULT_CONFIG,
                         ...preset.config,
-                        scaling: { ...DEFAULT_CONFIG.scaling, ...(preset.config.scaling || {}) },
-                        advanced: { ...DEFAULT_CONFIG.advanced, ...(preset.config.advanced || {}) },
-                        chaos: { ...DEFAULT_CONFIG.chaos, ...(preset.config.chaos || {}) },
                         simulation: { ...DEFAULT_CONFIG.simulation, ...(preset.config.simulation || {}) },
-                        traffic: preset.config.traffic || DEFAULT_CONFIG.traffic,
-                        queue: { ...DEFAULT_CONFIG.queue, ...(preset.config.queue || {}) },
+                        producer: { ...DEFAULT_CONFIG.producer, ...(preset.config.producer || {}) },
+                        client: { ...DEFAULT_CONFIG.client, ...(preset.config.client || {}) },
+                        broker: { ...DEFAULT_CONFIG.broker, ...(preset.config.broker || {}) },
+                        service: { ...DEFAULT_CONFIG.service, ...(preset.config.service || {}) },
                     };
                     this.setConfig(fullConfig);
                     this.notifyChange();
@@ -362,64 +421,63 @@ export class UIControls {
             });
         }
     }
-    bindQueueToggle() {
-        const toggle = document.getElementById('queue-enabled');
-        const params = document.getElementById('queue-params');
+    bindBrokerToggle() {
+        const toggle = document.getElementById('broker-enabled');
+        const params = document.getElementById('broker-params');
         if (toggle && params) {
             toggle.addEventListener('change', () => {
                 params.classList.toggle('hidden', !toggle.checked);
                 this.notifyChange();
             });
         }
-        const maxSizeInput = document.getElementById('param-queue_max_size');
-        const unlimitedBtn = document.getElementById('queue-unlimited-btn');
+        const maxSizeInput = document.getElementById('param-broker_max_size');
+        const unlimitedBtn = document.getElementById('broker-unlimited-btn');
         if (maxSizeInput) {
             maxSizeInput.addEventListener('input', () => {
-                this.updateQueueSizeUI(maxSizeInput);
+                this.updateBrokerSizeUI(maxSizeInput);
                 this.notifyChange();
             });
-            this.updateQueueSizeUI(maxSizeInput);
+            this.updateBrokerSizeUI(maxSizeInput);
         }
         if (unlimitedBtn && maxSizeInput) {
             unlimitedBtn.addEventListener('click', () => {
                 const isUnlimited = parseFloat(maxSizeInput.value) === 0;
                 maxSizeInput.value = isUnlimited ? '1000' : '0';
-                this.updateQueueSizeUI(maxSizeInput);
+                this.updateBrokerSizeUI(maxSizeInput);
                 this.notifyChange();
             });
         }
     }
-    updateQueueSizeUI(input) {
+    bindRetryDelayTooltip() {
+        const delayInput = document.getElementById('param-retry_delay');
+        const tickInput = document.getElementById('sim-tick');
+        const tooltipBtn = delayInput?.parentElement?.querySelector('.tooltip-btn');
+        if (!delayInput || !tickInput || !tooltipBtn)
+            return;
+        const update = () => {
+            const delay = parseFloat(delayInput.value) || 0;
+            const tickInterval = parseFloat(tickInput.value) || 1;
+            const ticks = Math.max(1, Math.ceil(delay / tickInterval));
+            const tickNote = delay === 0
+                ? 'Currently: 1 tick (immediate).'
+                : `Currently: ${ticks} tick${ticks > 1 ? 's' : ''} at ${tickInterval}s interval.`;
+            tooltipBtn.dataset.tooltip = `Seconds between a request failing and the client retrying it. Models backoff behavior. 0 = retry on the very next tick (aggressive). Higher values spread retries over time, reducing the spike but prolonging the storm. ${tickNote}`;
+        };
+        delayInput.addEventListener('input', update);
+        tickInput.addEventListener('input', update);
+        update();
+    }
+    updateBrokerSizeUI(input) {
         const isUnlimited = parseFloat(input.value) === 0;
-        const unit = document.getElementById('queue-size-unit');
+        const unit = document.getElementById('broker-size-unit');
         if (unit) {
             unit.textContent = isUnlimited ? '= unlimited' : 'req';
         }
-        const btn = document.getElementById('queue-unlimited-btn');
+        const btn = document.getElementById('broker-unlimited-btn');
         if (btn) {
             btn.classList.toggle('active', isUnlimited);
         }
         input.disabled = isUnlimited;
-    }
-    getQueueConfig() {
-        const toggle = document.getElementById('queue-enabled');
-        return {
-            enabled: toggle ? toggle.checked : false,
-            max_size: this.getNumericValue('param-queue_max_size', DEFAULT_CONFIG.queue.max_size),
-        };
-    }
-    setQueueConfig(queue) {
-        const toggle = document.getElementById('queue-enabled');
-        const params = document.getElementById('queue-params');
-        if (toggle) {
-            toggle.checked = queue.enabled;
-            if (params)
-                params.classList.toggle('hidden', !queue.enabled);
-        }
-        this.setNumericValue('param-queue_max_size', queue.max_size);
-        const maxSizeInput = document.getElementById('param-queue_max_size');
-        if (maxSizeInput)
-            this.updateQueueSizeUI(maxSizeInput);
     }
     getFailureEvents() {
         const container = document.getElementById('failure-events-container');

@@ -22,6 +22,7 @@
   --red: #ef4444;
   --red-dim: rgba(239, 68, 68, 0.5);
   --amber: #fbbf24;
+  --amber-dim: rgba(251, 191, 36, 0.4);
   --border-subtle: rgba(113, 113, 122, 0.25);
   --border-neon: rgba(34, 211, 238, 0.18);
   --font-heading: 'JetBrains Mono', 'Fira Code', monospace;
@@ -273,14 +274,14 @@ header {
   padding: 0.75rem var(--card-padding);
 }
 
-/* --- Queue Mode Toggle --- */
-.queue-toggle-row {
+/* --- Broker Mode Toggle --- */
+.broker-toggle-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.queue-mode-toggle {
+.broker-mode-toggle {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -291,22 +292,22 @@ header {
   color: var(--text-primary);
 }
 
-.queue-mode-toggle input[type="checkbox"] {
+.broker-mode-toggle input[type="checkbox"] {
   accent-color: var(--cyan);
   width: 16px;
   height: 16px;
   cursor: pointer;
 }
 
-.queue-params {
+.broker-params {
   margin-top: 0.75rem;
 }
 
-.queue-params.hidden {
+.broker-params.hidden {
   display: none;
 }
 
-#queue-unlimited-btn.active {
+#broker-unlimited-btn.active {
   background: var(--cyan);
   color: var(--bg-primary);
   border-color: var(--cyan);
@@ -332,6 +333,44 @@ legend {
 
 .red-border legend {
   color: var(--red);
+}
+
+.advanced-col:last-child legend {
+  color: var(--amber);
+}
+
+.param-group {
+  border-left: 2px solid var(--border-subtle);
+  padding-left: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.param-group-label {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 0.4rem;
+}
+
+.advanced-columns {
+  display: flex;
+  gap: 1.2rem;
+  align-items: flex-start;
+}
+
+.advanced-columns .advanced-col {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .advanced-columns {
+    flex-direction: column;
+  }
 }
 
 /* --- Parameter Rows --- */
@@ -901,6 +940,19 @@ button:active, .btn:active {
   text-shadow: 0 0 10px var(--red-dim);
 }
 
+.stat-run-line {
+  display: block;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.stat-run-label {
+  color: var(--purple);
+  font-weight: 600;
+  font-size: 0.75rem;
+  margin-right: 0.25rem;
+}
+
 .cost-basis-btn {
   font-size: 0.65rem;
   color: var(--cyan);
@@ -1030,6 +1082,35 @@ button:active, .btn:active {
 
 .log-msg {
   color: var(--text-secondary);
+}
+
+.log-run {
+  color: var(--purple);
+  min-width: 40px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.log-run-filter-container {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.log-run-filter-container.hidden {
+  display: none;
+}
+
+.log-run-select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .log-line[data-type="scale-up"] .log-msg { color: var(--cyan); }

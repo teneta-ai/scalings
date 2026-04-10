@@ -12,6 +12,14 @@ export declare class UIControls {
     private notifyChange;
     getConfig(): SimulationConfig;
     setConfig(config: SimulationConfig): void;
+    private getProducerConfig;
+    private setProducerConfig;
+    private getClientConfig;
+    private setClientConfig;
+    private getBrokerConfig;
+    private setBrokerConfig;
+    private getServiceConfig;
+    private setServiceConfig;
     private getTrafficConfig;
     private setTrafficConfig;
     private getStepEntries;
@@ -26,10 +34,9 @@ export declare class UIControls {
     private bindChaosToggle;
     private bindCollapsibleSection;
     private bindFailureEventControls;
-    private bindQueueToggle;
-    private updateQueueSizeUI;
-    private getQueueConfig;
-    private setQueueConfig;
+    private bindBrokerToggle;
+    private bindRetryDelayTooltip;
+    private updateBrokerSizeUI;
     private getFailureEvents;
     private setFailureEvents;
     addFailureEventRow(time?: number, count?: number): void;

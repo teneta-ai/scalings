@@ -9,6 +9,7 @@ class App {
         this.isSimulating = false;
         this.isRecording = false;
         this.recordedRuns = [];
+        this.runCounter = 0;
         this.services = createServices();
         this.controls = new UIControls(this.services.traffic);
         this.chart = new ChartRenderer();
@@ -42,20 +43,36 @@ class App {
         // Record runs toggle
         const recordToggle = document.getElementById('record-runs');
         const purgeBtn = document.getElementById('btn-purge-runs');
+        const exportRunsBtn = document.getElementById('btn-export-runs');
+        const importRunsBtn = document.getElementById('btn-import-runs');
+        const importRunsInput = document.getElementById('import-runs-input');
+        const runButtons = [purgeBtn, exportRunsBtn];
         if (recordToggle) {
             recordToggle.addEventListener('change', () => {
                 this.isRecording = recordToggle.checked;
-                if (purgeBtn)
-                    purgeBtn.classList.toggle('hidden', !this.isRecording);
-                if (!this.isRecording)
+                for (const btn of runButtons) {
+                    if (btn)
+                        btn.classList.toggle('hidden', !this.isRecording);
+                }
+                if (!this.isRecording) {
                     this.recordedRuns = [];
+                    this.runCounter = 0;
+                }
             });
         }
         if (purgeBtn) {
             purgeBtn.addEventListener('click', () => {
                 this.recordedRuns = [];
+                this.runCounter = 0;
                 this.showToast('All recorded runs cleared', 'success');
             });
+        }
+        if (exportRunsBtn) {
+            exportRunsBtn.addEventListener('click', () => this.exportRuns());
+        }
+        if (importRunsBtn && importRunsInput) {
+            importRunsBtn.addEventListener('click', () => importRunsInput.click());
+            importRunsInput.addEventListener('change', (e) => this.importRuns(e));
         }
         // Export source config
         const exportBtn = document.getElementById('btn-export-yaml');
@@ -192,6 +209,9 @@ class App {
             if (el)
                 el.addEventListener('change', () => this.applyLogFilters());
         }
+        const runFilterEl = document.getElementById('log-run-filter');
+        if (runFilterEl)
+            runFilterEl.addEventListener('change', () => this.applyLogFilters());
         // Log copy & download
         const logCopyBtn = document.getElementById('btn-log-copy');
         if (logCopyBtn) {
@@ -270,8 +290,15 @@ class App {
                 const speed = parseFloat(document.getElementById('playback-speed')?.value || '5');
                 await this.chart.renderAnimated('sim-chart', result, speed);
             }
-            this.renderSummary(result.summary);
-            this.renderLog(result.snapshots);
+            this.runCounter++;
+            if (this.isRecording) {
+                this.renderMultiRunSummary(this.recordedRuns);
+                this.renderMultiRunLog(this.recordedRuns);
+            }
+            else {
+                this.renderSummary(result.summary);
+                this.renderLog(result.snapshots, null);
+            }
         }
         catch (err) {
             console.error('Simulation error:', err);
@@ -303,6 +330,40 @@ class App {
                 queueStatCard.classList.add('hidden');
             }
         }
+        // Peak wait time stat
+        const waitStatCard = document.getElementById('stat-card-peak-wait');
+        if (waitStatCard) {
+            if (summary.peak_queue_wait_time_ms > 0) {
+                waitStatCard.classList.remove('hidden');
+                const waitMs = summary.peak_queue_wait_time_ms;
+                this.setSummaryValue('stat-peak-wait', waitMs >= 1000 ? `${(waitMs / 1000).toFixed(1)}s` : `${Math.round(waitMs)}ms`);
+            }
+            else {
+                waitStatCard.classList.add('hidden');
+            }
+        }
+        // Expired requests stat
+        const expiredStatCard = document.getElementById('stat-card-expired');
+        if (expiredStatCard) {
+            if (summary.total_expired > 0) {
+                expiredStatCard.classList.remove('hidden');
+                this.setSummaryValue('stat-expired', this.formatNumber(summary.total_expired));
+            }
+            else {
+                expiredStatCard.classList.add('hidden');
+            }
+        }
+        // Retry traffic stat
+        const retriesStatCard = document.getElementById('stat-card-retries');
+        if (retriesStatCard) {
+            if (summary.total_retries > 0) {
+                retriesStatCard.classList.remove('hidden');
+                this.setSummaryValue('stat-retries', this.formatNumber(summary.total_retries));
+            }
+            else {
+                retriesStatCard.classList.add('hidden');
+            }
+        }
         this.setSummaryValue('stat-underprov-time', `${summary.time_under_provisioned_seconds}s (${summary.time_under_provisioned_percent.toFixed(1)}%)`);
         this.setSummaryValue('stat-recovery-time', summary.time_to_recover_seconds !== null ? `${summary.time_to_recover_seconds}s` : 'N/A');
         this.setSummaryValue('stat-cost', `$${summary.estimated_total_cost.toFixed(4)}`);
@@ -315,6 +376,50 @@ class App {
         if (dropRateEl) {
             dropRateEl.classList.toggle('danger', summary.drop_rate_percent > 1);
         }
+    }
+    renderMultiRunSummary(runs) {
+        const stats = [
+            { id: 'stat-total-requests', extract: s => this.formatNumber(s.total_requests) },
+            { id: 'stat-served', extract: s => this.formatNumber(s.total_served) },
+            { id: 'stat-dropped', extract: s => this.formatNumber(s.total_dropped) },
+            { id: 'stat-drop-rate', extract: s => `${s.drop_rate_percent.toFixed(2)}%` },
+            { id: 'stat-peak-pods', extract: s => s.peak_pod_count.toString() },
+            { id: 'stat-peak-queue', cardId: 'stat-card-peak-queue', extract: s => this.formatNumber(s.peak_queue_depth), showIf: s => s.peak_queue_depth > 0 },
+            { id: 'stat-peak-wait', cardId: 'stat-card-peak-wait', extract: s => {
+                    const ms = s.peak_queue_wait_time_ms;
+                    return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+                }, showIf: s => s.peak_queue_wait_time_ms > 0 },
+            { id: 'stat-expired', cardId: 'stat-card-expired', extract: s => this.formatNumber(s.total_expired), showIf: s => s.total_expired > 0 },
+            { id: 'stat-retries', cardId: 'stat-card-retries', extract: s => this.formatNumber(s.total_retries), showIf: s => s.total_retries > 0 },
+            { id: 'stat-underprov-time', extract: s => `${s.time_under_provisioned_seconds}s (${s.time_under_provisioned_percent.toFixed(1)}%)` },
+            { id: 'stat-recovery-time', extract: s => s.time_to_recover_seconds !== null ? `${s.time_to_recover_seconds}s` : 'N/A' },
+            { id: 'stat-cost', extract: s => `$${s.estimated_total_cost.toFixed(4)}` },
+        ];
+        for (const stat of stats) {
+            // Show/hide conditional cards
+            if (stat.cardId) {
+                const card = document.getElementById(stat.cardId);
+                if (card) {
+                    const anyVisible = runs.some(r => stat.showIf(r.result.summary));
+                    card.classList.toggle('hidden', !anyVisible);
+                    if (!anyVisible)
+                        continue;
+                }
+            }
+            const el = document.getElementById(stat.id);
+            if (!el)
+                continue;
+            const lines = runs.map(r => `<span class="stat-run-line"><span class="stat-run-label">${r.name}:</span> ${stat.extract(r.result.summary)}</span>`);
+            el.innerHTML = lines.join('');
+        }
+        // Highlight drops based on latest run
+        const latest = runs[runs.length - 1].result.summary;
+        const droppedEl = document.getElementById('stat-dropped');
+        if (droppedEl)
+            droppedEl.classList.toggle('danger', latest.total_dropped > 0);
+        const dropRateEl = document.getElementById('stat-drop-rate');
+        if (dropRateEl)
+            dropRateEl.classList.toggle('danger', latest.drop_rate_percent > 1);
     }
     // --- Decision Log ---
     classifyLog(msg) {
@@ -338,37 +443,92 @@ class App {
             return { type: 'drop', category: 'traffic' };
         if (msg.startsWith('Recovered'))
             return { type: 'recover', category: 'traffic' };
+        if (msg.startsWith('Expired'))
+            return { type: 'expired', category: 'traffic' };
+        if (msg.startsWith('Saturation'))
+            return { type: 'backpressure', category: 'traffic' };
+        if (msg.includes('will retry'))
+            return { type: 'retry', category: 'traffic' };
         return { type: 'info', category: 'scale' };
     }
-    renderLog(snapshots) {
+    renderLog(snapshots, runName) {
         const container = document.getElementById('log-entries');
         const countEl = document.getElementById('log-count');
         if (!container)
             return;
         container.innerHTML = '';
+        this.updateRunFilter(runName ? [runName] : []);
         let eventCount = 0;
         for (const snap of snapshots) {
             if (snap.log_entries.length === 0)
                 continue;
             for (const msg of snap.log_entries) {
                 eventCount++;
-                const { type, category } = this.classifyLog(msg);
-                const line = document.createElement('div');
-                line.className = 'log-line';
-                line.dataset.type = type;
-                line.dataset.category = category;
-                const timeStr = snap.time >= 3600
-                    ? `${Math.floor(snap.time / 3600)}h${Math.floor((snap.time % 3600) / 60).toString().padStart(2, '0')}m${(snap.time % 60).toString().padStart(2, '0')}s`
-                    : snap.time >= 60
-                        ? `${Math.floor(snap.time / 60)}m${(snap.time % 60).toString().padStart(2, '0')}s`
-                        : `${snap.time}s`;
-                line.innerHTML = `<span class="log-time">${timeStr}</span><span class="log-msg">${msg}</span>`;
-                container.appendChild(line);
+                this.appendLogLine(container, snap.time, msg, runName);
             }
         }
         if (countEl)
             countEl.textContent = `${eventCount} events`;
         this.applyLogFilters();
+    }
+    renderMultiRunLog(runs) {
+        const container = document.getElementById('log-entries');
+        const countEl = document.getElementById('log-count');
+        if (!container)
+            return;
+        container.innerHTML = '';
+        const runNames = runs.map(r => r.name);
+        this.updateRunFilter(runNames);
+        let eventCount = 0;
+        for (const run of runs) {
+            for (const snap of run.result.snapshots) {
+                if (snap.log_entries.length === 0)
+                    continue;
+                for (const msg of snap.log_entries) {
+                    eventCount++;
+                    this.appendLogLine(container, snap.time, msg, run.name);
+                }
+            }
+        }
+        if (countEl)
+            countEl.textContent = `${eventCount} events`;
+        this.applyLogFilters();
+    }
+    appendLogLine(container, time, msg, runName) {
+        const { type, category } = this.classifyLog(msg);
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        line.dataset.type = type;
+        line.dataset.category = category;
+        if (runName)
+            line.dataset.run = runName;
+        const timeStr = time >= 3600
+            ? `${Math.floor(time / 3600)}h${Math.floor((time % 3600) / 60).toString().padStart(2, '0')}m${(time % 60).toString().padStart(2, '0')}s`
+            : time >= 60
+                ? `${Math.floor(time / 60)}m${(time % 60).toString().padStart(2, '0')}s`
+                : `${time}s`;
+        const runCol = runName ? `<span class="log-run">${runName}</span>` : '';
+        line.innerHTML = `${runCol}<span class="log-time">${timeStr}</span><span class="log-msg">${msg}</span>`;
+        container.appendChild(line);
+    }
+    updateRunFilter(runNames) {
+        const filterContainer = document.getElementById('log-run-filter-container');
+        const select = document.getElementById('log-run-filter');
+        if (!filterContainer || !select)
+            return;
+        if (runNames.length <= 1) {
+            filterContainer.classList.add('hidden');
+            select.innerHTML = '<option value="all">All Runs</option>';
+            return;
+        }
+        filterContainer.classList.remove('hidden');
+        select.innerHTML = '<option value="all">All Runs</option>';
+        for (const name of runNames) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        }
     }
     applyLogFilters() {
         const filters = {
@@ -377,11 +537,15 @@ class App {
             failures: document.getElementById('log-filter-failures')?.checked ?? true,
             traffic: document.getElementById('log-filter-traffic')?.checked ?? true,
         };
+        const runFilter = document.getElementById('log-run-filter')?.value || 'all';
         const lines = document.querySelectorAll('.log-line');
         for (const line of lines) {
             const el = line;
             const cat = el.dataset.category || 'scale';
-            el.style.display = filters[cat] ? '' : 'none';
+            const run = el.dataset.run || '';
+            const categoryMatch = filters[cat];
+            const runMatch = runFilter === 'all' || run === runFilter;
+            el.style.display = (categoryMatch && runMatch) ? '' : 'none';
         }
     }
     getLogText() {
@@ -391,9 +555,11 @@ class App {
             const el = line;
             if (el.style.display === 'none')
                 continue;
+            const run = el.querySelector('.log-run')?.textContent || '';
             const time = el.querySelector('.log-time')?.textContent || '';
             const msg = el.querySelector('.log-msg')?.textContent || '';
-            parts.push(`[${time}] ${msg}`);
+            const prefix = run ? `[${run}] ` : '';
+            parts.push(`${prefix}[${time}] ${msg}`);
         }
         return parts.join('\n');
     }
@@ -458,6 +624,59 @@ class App {
             code.textContent = content;
         if (label)
             label.textContent = title;
+    }
+    // --- Run export / import ---
+    exportRuns() {
+        if (this.recordedRuns.length === 0) {
+            this.showError('No recorded runs to export');
+            return;
+        }
+        const json = JSON.stringify(this.recordedRuns, null, 2);
+        this.offerDownload(json, 'simulation-runs.json', 'application/json');
+        this.showToast(`Exported ${this.recordedRuns.length} run(s)`, 'success');
+    }
+    async importRuns(e) {
+        const input = e.target;
+        if (!input.files?.length)
+            return;
+        try {
+            const text = await input.files[0].text();
+            const parsed = JSON.parse(text);
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+                throw new Error('File must contain a non-empty array of runs');
+            }
+            // Validate shape: each entry needs name + result with snapshots and summary
+            for (const run of parsed) {
+                if (!run.name || !run.result?.snapshots || !run.result?.summary) {
+                    throw new Error('Invalid run format: each entry needs name, result.snapshots, result.summary');
+                }
+            }
+            // Enable recording mode if not already
+            const recordToggle = document.getElementById('record-runs');
+            if (recordToggle && !recordToggle.checked) {
+                recordToggle.checked = true;
+                recordToggle.dispatchEvent(new Event('change'));
+            }
+            // Append imported runs
+            this.recordedRuns = parsed;
+            this.runCounter = parsed.length;
+            // Re-render chart, summary, and log
+            this.chart.renderMultiRun('sim-chart', this.recordedRuns);
+            this.renderMultiRunSummary(this.recordedRuns);
+            this.renderMultiRunLog(this.recordedRuns);
+            // Show results section
+            const placeholder = document.getElementById('sim-placeholder');
+            const resultsContent = document.getElementById('sim-results-content');
+            if (placeholder)
+                placeholder.classList.add('hidden');
+            if (resultsContent)
+                resultsContent.classList.remove('hidden');
+            this.showToast(`Imported ${parsed.length} run(s)`, 'success');
+        }
+        catch (err) {
+            this.showError('Import failed: ' + (err instanceof Error ? err.message : 'Invalid JSON'));
+        }
+        input.value = ''; // Reset for re-upload
     }
     // --- State management ---
     loadState() {

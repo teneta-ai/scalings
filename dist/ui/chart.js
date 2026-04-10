@@ -12,6 +12,9 @@ const COLORS = {
     droppedFill: 'rgba(239, 68, 68, 0.25)',
     queue: 'rgba(251, 191, 36, 0.9)',
     queueFill: 'rgba(251, 191, 36, 0.15)',
+    effectiveCapacity: 'rgba(251, 146, 60, 0.9)',
+    waitTime: 'rgba(244, 114, 182, 0.9)',
+    waitTimeFill: 'rgba(244, 114, 182, 0.15)',
 };
 export class ChartRenderer {
     constructor() {
@@ -73,6 +76,24 @@ export class ChartRenderer {
                     color: '#b347d9',
                     font: { family: "'JetBrains Mono', monospace", size: 10 },
                     stepSize: 1,
+                },
+                grid: { drawOnChartArea: false },
+                beginAtZero: true,
+            },
+            y2: {
+                type: 'linear',
+                position: 'right',
+                display: false, // only shown when wait time dataset exists
+                title: {
+                    display: true,
+                    text: 'Wait Time (ms)',
+                    color: COLORS.waitTime,
+                    font: { family: "'JetBrains Mono', monospace", size: 11 },
+                },
+                ticks: {
+                    color: COLORS.waitTime,
+                    font: { family: "'JetBrains Mono', monospace", size: 10 },
+                    callback: (val) => val >= 1000 ? `${(val / 1000).toFixed(1)}s` : `${val}ms`,
                 },
                 grid: { drawOnChartArea: false },
                 beginAtZero: true,
@@ -191,7 +212,47 @@ export class ChartRenderer {
                 borderDash: [3, 2],
             });
         }
+        // Show effective capacity line when saturation is reducing capacity
+        const hasSaturation = snapshots.some(s => s.effective_capacity_rps < s.capacity_rps);
+        if (hasSaturation) {
+            datasets.push({
+                label: 'Effective Capacity',
+                data: preloaded ? snapshots.map(s => s.effective_capacity_rps) : [],
+                borderColor: COLORS.effectiveCapacity,
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.2,
+                yAxisID: 'y',
+                order: 1,
+                borderDash: [6, 3],
+            });
+        }
+        // Show wait time when queue has latency
+        const hasWaitTime = snapshots.some(s => s.queue_wait_time_ms > 0);
+        if (hasWaitTime) {
+            datasets.push({
+                label: 'Queue Wait (ms)',
+                data: preloaded ? snapshots.map(s => s.queue_wait_time_ms) : [],
+                borderColor: COLORS.waitTime,
+                backgroundColor: COLORS.waitTimeFill,
+                fill: true,
+                borderWidth: 1.5,
+                pointRadius: 0,
+                tension: 0.2,
+                yAxisID: 'y2',
+                order: 0,
+                borderDash: [2, 2],
+            });
+        }
         return datasets;
+    }
+    /** Enable the y2 axis if a wait time dataset is present. */
+    enableY2IfNeeded(datasets) {
+        const hasY2 = datasets.some((d) => d.yAxisID === 'y2');
+        if (hasY2 && this.chart) {
+            this.chart.options.scales.y2.display = true;
+        }
     }
     /** Builds a label -> index map for safe dataset access by name. */
     indexDatasets(datasets) {
@@ -241,6 +302,7 @@ export class ChartRenderer {
                 scales: this.buildScales(),
             },
         });
+        this.enableY2IfNeeded(datasets);
         this.isPlaying = true;
         this.animate(snapshots);
     }
@@ -255,6 +317,8 @@ export class ChartRenderer {
         const droppedDs = this.getDatasetByLabel('Dropped (RPS)');
         const podsDs = this.getDatasetByLabel('Running Pods');
         const queueDs = this.getDatasetByLabel('Queue Depth');
+        const effectiveCapDs = this.getDatasetByLabel('Effective Capacity');
+        const waitTimeDs = this.getDatasetByLabel('Queue Wait (ms)');
         for (let i = this.currentIndex; i < nextIndex; i++) {
             const snap = snapshots[i];
             if (trafficDs)
@@ -267,6 +331,10 @@ export class ChartRenderer {
                 podsDs.data.push(snap.running_pods);
             if (queueDs)
                 queueDs.data.push(snap.queue_depth);
+            if (effectiveCapDs)
+                effectiveCapDs.data.push(snap.effective_capacity_rps);
+            if (waitTimeDs)
+                waitTimeDs.data.push(snap.queue_wait_time_ms);
         }
         this.currentIndex = nextIndex;
         this.chart.update('none');
@@ -314,6 +382,7 @@ export class ChartRenderer {
                 scales: this.buildScales(),
             },
         });
+        this.enableY2IfNeeded(datasets);
     }
     renderMultiRun(canvasId, runs) {
         this.stop();

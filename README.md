@@ -18,10 +18,13 @@ Supported platforms:
 ## Features
 
 - **Traffic patterns** — steady, gradual ramp, spike, sinusoidal wave, discrete steps, or custom time-series
+- **Message broker** — optional queue between producer and service (like SQS/Kafka), with configurable size and request timeout
+- **Saturation modeling** — capacity degradation under high pod utilization, request expiry via TTL, retry storm amplification
 - **Chaos engineering** — random pod failure rates and scheduled pod kill events with seeded PRNG for reproducible runs
 - **Real-world delays** — metric observation lag, cooldown periods, node provisioning time, graceful shutdown
 - **Cost estimation** — per-replica-hour cost tracking across the simulation
-- **Comparison mode** — run two configs side-by-side to see the impact of parameter changes
+- **Comparison mode** — record multiple runs, view per-run breakdown in summary stats and decision log, filter by run
+- **Import/Export runs** — save multi-run comparison data as JSON for sharing or later analysis
 - **Export** — generate deployable manifests (Kubernetes HPA YAML, AWS CloudFormation, GCP Terraform, gcloud CLI)
 - **Shareable URLs** — encode your full config in the URL hash for easy sharing
 
@@ -33,6 +36,9 @@ Supported platforms:
 | Gradual Daily Ramp | Workday traffic pattern with linear ramp |
 | Noisy Neighbor | Sinusoidal traffic + random pod failures |
 | Step Migration | Phased rollout with discrete traffic steps |
+| Bottomless Queue | Unlimited broker — no drops, backlog drains as capacity catches up |
+| Death Spiral (OLTP) | Pod saturation + retries cause cascading failure, no broker |
+| Death Spiral (Queued) | Same with a bounded broker — queue fills, requests expire |
 
 ## Development
 
@@ -78,6 +84,17 @@ src/
 │   └── chart.ts            # Chart.js visualization
 └── factory.ts              # Service factory / DI container
 ```
+
+### Config structure
+
+The config is organized around four entities:
+
+- **Producer** — traffic pattern (steady, spike, wave, etc.)
+- **Client** — resilience behavior (max retries, retry delay)
+- **Broker** — optional message queue (enabled/disabled, max size, request timeout)
+- **Service** — pod fleet with scaling, cooldowns, saturation, chaos, cost
+
+See [llms.txt](https://scalings.xyz/llms.txt) for full schema details.
 
 ## Programmatic usage
 
