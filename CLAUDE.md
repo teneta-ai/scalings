@@ -22,7 +22,7 @@ const config = {
   producer: {
     traffic: { pattern: 'spike', params: { base_rps: 200, spike_rps: 2000, spike_start: 60, spike_duration: 30 } },
   },
-  client: { retry_rate: 0 },
+  client: { max_retries: 0 },
   broker: { enabled: true, max_size: 0, request_timeout_ms: 0 },  // unlimited broker
 };
 

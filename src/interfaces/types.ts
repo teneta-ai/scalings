@@ -26,7 +26,7 @@ export interface ProducerConfig {
 // --- Client: resilience behavior (retries, etc.) ---
 
 export interface ClientConfig {
-  retry_rate: number;         // 0-1 fraction of dropped/expired requests that retry next tick
+  max_retries: number;        // max retry attempts per request (0 = no retries)
 }
 
 // --- Broker: optional message queue between producer and service ---
@@ -253,7 +253,7 @@ export const DEFAULT_PRODUCER: ProducerConfig = {
 };
 
 export const DEFAULT_CLIENT: ClientConfig = {
-  retry_rate: 0,
+  max_retries: 0,
 };
 
 export const DEFAULT_BROKER: BrokerConfig = {
@@ -459,7 +459,7 @@ export const PRESET_SCENARIOS: PresetScenario[] = [
         },
       },
       client: {
-        retry_rate: 0.3,
+        max_retries: 3,
       },
       broker: {
         enabled: true,

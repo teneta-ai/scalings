@@ -76,11 +76,11 @@ export class UIControls {
     // --- Client config helpers ---
     getClientConfig() {
         return {
-            retry_rate: this.getNumericValue('param-retry_rate', DEFAULT_CONFIG.client.retry_rate),
+            max_retries: this.getNumericValue('param-max_retries', DEFAULT_CONFIG.client.max_retries),
         };
     }
     setClientConfig(client) {
-        this.setNumericValue('param-retry_rate', client.retry_rate);
+        this.setNumericValue('param-max_retries', client.max_retries);
     }
     // --- Broker config helpers ---
     getBrokerConfig() {

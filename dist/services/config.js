@@ -89,7 +89,7 @@ export class LocalConfigService {
     validateClient(obj) {
         const d = DEFAULT_CONFIG.client;
         return {
-            retry_rate: this.num(obj.retry_rate, d.retry_rate),
+            max_retries: this.num(obj.max_retries, d.max_retries),
         };
     }
     validateBroker(obj) {
@@ -178,7 +178,7 @@ export class LocalConfigService {
         this.serializeTrafficParams(config.producer.traffic, lines);
         lines.push('');
         lines.push('client:');
-        lines.push(`  retry_rate: ${config.client.retry_rate}`);
+        lines.push(`  max_retries: ${config.client.max_retries}`);
         lines.push('');
         lines.push('broker:');
         lines.push(`  enabled: ${config.broker.enabled}`);

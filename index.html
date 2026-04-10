@@ -407,10 +407,10 @@
             <legend>Client</legend>
 
             <div class="param-row">
-              <label for="param-retry_rate" title="Fraction of dropped/expired requests that retry next tick (0-1). Models retry storms — when clients retry failed requests, they amplify the traffic load.">Retry Rate</label>
-              <input type="number" id="param-retry_rate" min="0" max="1" step="0.05" value="0" aria-label="Retry rate" title="Fraction of dropped/expired requests that retry next tick (0-1). 0.3 = 30% of failures retry.">
-              <span class="unit">ratio</span>
-              <button class="tooltip-btn" data-tooltip="Fraction of dropped or expired requests that re-enter as new traffic on the next tick. Models client retry behavior: when requests fail (dropped or expired), clients retry and amplify the traffic load, potentially causing cascading failures. 0 = no retries. 0.3 = 30% of failures retry.">?</button>
+              <label for="param-max_retries" title="Maximum retry attempts per failed request. 0 = no retries.">Max Retries</label>
+              <input type="number" id="param-max_retries" min="0" max="10" value="0" aria-label="Max retries" title="Maximum number of times a failed request will be retried. 0 = no retries. 3 = up to 3 retry attempts.">
+              <span class="unit"></span>
+              <button class="tooltip-btn" data-tooltip="Maximum number of retry attempts per failed request. When a request is dropped or expires, the client retries it on the next tick, up to this many times. Models retry storms: retries amplify traffic and can cause cascading failures. 0 = disabled.">?</button>
             </div>
           </fieldset>
         </div>

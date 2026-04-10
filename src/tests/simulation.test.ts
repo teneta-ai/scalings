@@ -823,7 +823,7 @@ describe('SimulationService — retry storms', () => {
       simulation: { duration: 30, tick_interval: 1 },
       service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
       producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams } },
-      client: { retry_rate: 0.5 },
+      client: { max_retries: 3 },
       broker: { ...DEFAULT_BROKER, enabled: true, max_size: 200 },
     });
     const result = await svc.run(config);
@@ -834,26 +834,26 @@ describe('SimulationService — retry storms', () => {
     assert.ok(result.summary.total_retries > 0, 'summary should track total retries');
   });
 
-  it('no retries when retry_rate is 0', async () => {
+  it('no retries when max_retries is 0', async () => {
     const config = makeConfig({
       simulation: { duration: 20, tick_interval: 1 },
       service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
       producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams } },
-      client: { retry_rate: 0 },
+      client: { max_retries: 0 },
       broker: { ...DEFAULT_BROKER, enabled: true, max_size: 200 },
     });
     const result = await svc.run(config);
     for (const snap of result.snapshots) {
-      assert.equal(snap.retry_requests, 0, `t=${snap.time}: no retries when rate is 0`);
+      assert.equal(snap.retry_requests, 0, `t=${snap.time}: no retries when max_retries is 0`);
     }
   });
 
-  it('retries from expired requests trigger when both timeout and retry are configured', async () => {
+  it('retries from expired requests trigger when both timeout and retries are configured', async () => {
     const config = makeConfig({
       simulation: { duration: 30, tick_interval: 1 },
       service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
       producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 500 } as SteadyParams } },
-      client: { retry_rate: 0.3 },
+      client: { max_retries: 3 },
       broker: { ...DEFAULT_BROKER, enabled: true, max_size: 0, request_timeout_ms: 2000 },
     });
     const result = await svc.run(config);
@@ -861,6 +861,25 @@ describe('SimulationService — retry storms', () => {
     // Both expiry and retries should be present
     assert.ok(result.summary.total_expired > 0, 'should have expired requests');
     assert.ok(result.summary.total_retries > 0, 'expired requests should trigger retries');
+  });
+
+  it('requests are permanently dropped after max retries exhausted', async () => {
+    // With max_retries=1, each failed request gets 1 retry then is dropped
+    const config = makeConfig({
+      simulation: { duration: 20, tick_interval: 1 },
+      service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 200 } as SteadyParams } },
+      client: { max_retries: 1 },
+    });
+    const result = await svc.run(config);
+
+    // With max_retries=1, retry traffic should be bounded (not growing without limit)
+    // Later ticks should show stable retry traffic, not exponential growth
+    const laterRetries = result.snapshots.slice(5).map(s => s.retry_requests);
+    const maxRetry = Math.max(...laterRetries);
+    // Retries should exist but not exceed fresh traffic (bounded by 1 attempt)
+    assert.ok(maxRetry > 0, 'should have retry traffic');
+    assert.ok(maxRetry <= 200, 'retry traffic should be bounded by fresh traffic rate');
   });
 });
 

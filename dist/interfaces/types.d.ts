@@ -9,7 +9,7 @@ export interface ProducerConfig {
     traffic: TrafficConfig;
 }
 export interface ClientConfig {
-    retry_rate: number;
+    max_retries: number;
 }
 export interface BrokerConfig {
     enabled: boolean;

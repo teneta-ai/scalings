@@ -19,7 +19,7 @@ export const DEFAULT_PRODUCER = {
     traffic: DEFAULT_TRAFFIC,
 };
 export const DEFAULT_CLIENT = {
-    retry_rate: 0,
+    max_retries: 0,
 };
 export const DEFAULT_BROKER = {
     enabled: false,
@@ -221,7 +221,7 @@ export const PRESET_SCENARIOS = [
                 },
             },
             client: {
-                retry_rate: 0.3,
+                max_retries: 3,
             },
             broker: {
                 enabled: true,

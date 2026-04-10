@@ -40,7 +40,10 @@ export class LocalSimulationService {
         const snapshots = [];
         // Queue state
         let queuedRequests = 0;
-        let pendingRetries = 0; // retry traffic carried over from previous tick
+        // Retry cohorts: pendingRetries[k] = requests pending at attempt k+1
+        const pendingRetries = client.max_retries > 0
+            ? new Array(client.max_retries).fill(0)
+            : [];
         // Utilization history for delayed observation
         const utilizationHistory = [];
         // Initialize with min replicas (already running)
@@ -114,8 +117,10 @@ export class LocalSimulationService {
                 logEntries.push(`${finishedShutdown} pod${finishedShutdown > 1 ? 's' : ''} completed graceful shutdown and terminated`);
             }
             // --- Inject retry traffic from previous tick ---
-            const retryTraffic = pendingRetries;
-            pendingRetries = 0;
+            let retryTraffic = 0;
+            for (let k = 0; k < pendingRetries.length; k++) {
+                retryTraffic += pendingRetries[k];
+            }
             const effectiveTraffic = currentTraffic + retryTraffic;
             // --- Calculate capacity ---
             const runningPods = pods.filter(p => p.state === 'running');
@@ -223,11 +228,24 @@ export class LocalSimulationService {
                 ? (queuedRequests / capacity) * 1000
                 : 0;
             // --- Schedule retries for next tick ---
-            const retriable = dropped + expired;
-            if (client.retry_rate > 0 && retriable > 0) {
-                pendingRetries = Math.round(retriable * client.retry_rate);
-                if (pendingRetries > 0) {
-                    logEntries.push(`${pendingRetries} requests will retry next tick (${(client.retry_rate * 100).toFixed(0)}% retry rate)`);
+            if (client.max_retries > 0 && effectiveTraffic > 0) {
+                const failedTotal = dropped + expired;
+                const failRatio = effectiveTraffic > 0 ? failedTotal / effectiveTraffic : 0;
+                // Distribute failures proportionally across fresh traffic and each retry cohort
+                // Fresh failures → attempt 1, attempt K failures → attempt K+1, max reached → permanently dropped
+                const freshFailed = Math.round(currentTraffic * failRatio);
+                const nextRetries = new Array(client.max_retries).fill(0);
+                nextRetries[0] = freshFailed; // fresh failures become attempt 1
+                for (let k = 0; k < pendingRetries.length - 1; k++) {
+                    nextRetries[k + 1] += Math.round(pendingRetries[k] * failRatio); // promote to next attempt
+                }
+                // pendingRetries[max_retries - 1] failures are permanently dropped (max reached)
+                const totalScheduled = nextRetries.reduce((a, b) => a + b, 0);
+                for (let k = 0; k < pendingRetries.length; k++) {
+                    pendingRetries[k] = nextRetries[k];
+                }
+                if (totalScheduled > 0) {
+                    logEntries.push(`${totalScheduled} requests will retry next tick (max ${client.max_retries} attempts)`);
                 }
             }
             // Log drop transitions
