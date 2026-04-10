@@ -7,6 +7,15 @@ import { SimulationConfig, SimulationResult, SimulationSummary, TickSnapshot } f
 import { UIControls } from './controls.js';
 import { ChartRenderer } from './chart.js';
 
+/** Per-run label colors — matches chart RUN_COLORS order for visual consistency. */
+const RUN_LABEL_COLORS = [
+  '#84cc16', // lime (chart run 1 capacity)
+  '#fbbf24', // amber (chart run 2 capacity)
+  '#38bdf8', // sky (chart run 3 capacity)
+  '#f472b6', // pink (chart run 4 capacity)
+  '#34d399', // emerald (chart run 5 capacity)
+];
+
 class App {
   private services: ServiceContainer;
   private controls: UIControls;
@@ -336,7 +345,10 @@ class App {
     const el = document.getElementById('summary-run-id');
     if (!el) return;
     if (runs && runs.length > 0) {
-      el.textContent = runs.map(r => `${r.name}: ${r.result.run_id}`).join('  |  ');
+      el.innerHTML = runs.map((r, i) => {
+        const color = RUN_LABEL_COLORS[i % RUN_LABEL_COLORS.length];
+        return `<span style="color:${color};font-weight:600">${r.name}</span>: ${r.result.run_id}`;
+      }).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
       el.classList.remove('hidden');
     } else if (runId) {
       el.textContent = `Run ID: ${runId}`;
@@ -446,9 +458,10 @@ class App {
       const el = document.getElementById(stat.id);
       if (!el) continue;
 
-      const lines = runs.map(r =>
-        `<span class="stat-run-line"><span class="stat-run-label">${r.name}:</span> ${stat.extract(r.result.summary)}</span>`
-      );
+      const lines = runs.map((r, i) => {
+        const color = RUN_LABEL_COLORS[i % RUN_LABEL_COLORS.length];
+        return `<span class="stat-run-line"><span class="stat-run-label" style="color:${color}">${r.name}:</span> ${stat.extract(r.result.summary)}</span>`;
+      });
       el.innerHTML = lines.join('');
     }
 
@@ -510,21 +523,21 @@ class App {
     this.updateRunFilter(runNames);
     let eventCount = 0;
 
-    for (const run of runs) {
+    runs.forEach((run, i) => {
       for (const snap of run.result.snapshots) {
         if (snap.log_entries.length === 0) continue;
         for (const msg of snap.log_entries) {
           eventCount++;
-          this.appendLogLine(container, snap.time, msg, run.name, run.result.run_id);
+          this.appendLogLine(container, snap.time, msg, run.name, run.result.run_id, i);
         }
       }
-    }
+    });
 
     if (countEl) countEl.textContent = `${eventCount} events`;
     this.applyLogFilters();
   }
 
-  private appendLogLine(container: HTMLElement, time: number, msg: string, runLabel: string | null, runId: string | null = null): void {
+  private appendLogLine(container: HTMLElement, time: number, msg: string, runLabel: string | null, runId: string | null = null, runIndex: number = -1): void {
     const { type, category } = this.classifyLog(msg);
     const line = document.createElement('div');
     line.className = 'log-line';
@@ -539,7 +552,11 @@ class App {
         ? `${Math.floor(time / 60)}m${(time % 60).toString().padStart(2, '0')}s`
         : `${time}s`;
 
-    const runCol = runLabel ? `<span class="log-run">${runLabel}</span>` : '';
+    let runCol = '';
+    if (runLabel) {
+      const colorStyle = runIndex >= 0 ? ` style="color:${RUN_LABEL_COLORS[runIndex % RUN_LABEL_COLORS.length]}"` : '';
+      runCol = `<span class="log-run"${colorStyle}>${runLabel}</span>`;
+    }
     const idCol = runId ? `<span class="log-run-id">${runId}</span>` : '';
     line.innerHTML = `${runCol}${idCol}<span class="log-time">${timeStr}</span><span class="log-msg">${msg}</span>`;
     container.appendChild(line);
@@ -558,12 +575,13 @@ class App {
 
     filterContainer.classList.remove('hidden');
     select.innerHTML = '<option value="all">All Runs</option>';
-    for (const name of runNames) {
+    runNames.forEach((name, i) => {
       const opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
+      opt.style.color = RUN_LABEL_COLORS[i % RUN_LABEL_COLORS.length];
       select.appendChild(opt);
-    }
+    });
   }
 
   private applyLogFilters(): void {
