@@ -335,20 +335,25 @@ legend {
   color: var(--red);
 }
 
-.param-subgroup {
-  font-family: var(--font-body);
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  margin: 1rem 0 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border-subtle);
+.advanced-col:last-child legend {
+  color: var(--amber);
 }
 
-.param-subgroup:first-of-type {
-  margin-top: 0.25rem;
+.advanced-columns {
+  display: flex;
+  gap: 1.2rem;
+  align-items: flex-start;
+}
+
+.advanced-columns .advanced-col {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .advanced-columns {
+    flex-direction: column;
+  }
 }
 
 /* --- Parameter Rows --- */
