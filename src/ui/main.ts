@@ -55,10 +55,16 @@ class App {
     // Record runs toggle
     const recordToggle = document.getElementById('record-runs') as HTMLInputElement;
     const purgeBtn = document.getElementById('btn-purge-runs');
+    const exportRunsBtn = document.getElementById('btn-export-runs');
+    const importRunsBtn = document.getElementById('btn-import-runs');
+    const importRunsInput = document.getElementById('import-runs-input') as HTMLInputElement;
+    const runButtons = [purgeBtn, exportRunsBtn, importRunsBtn];
     if (recordToggle) {
       recordToggle.addEventListener('change', () => {
         this.isRecording = recordToggle.checked;
-        if (purgeBtn) purgeBtn.classList.toggle('hidden', !this.isRecording);
+        for (const btn of runButtons) {
+          if (btn) btn.classList.toggle('hidden', !this.isRecording);
+        }
         if (!this.isRecording) {
           this.recordedRuns = [];
           this.runCounter = 0;
@@ -71,6 +77,13 @@ class App {
         this.runCounter = 0;
         this.showToast('All recorded runs cleared', 'success');
       });
+    }
+    if (exportRunsBtn) {
+      exportRunsBtn.addEventListener('click', () => this.exportRuns());
+    }
+    if (importRunsBtn && importRunsInput) {
+      importRunsBtn.addEventListener('click', () => importRunsInput.click());
+      importRunsInput.addEventListener('change', (e) => this.importRuns(e));
     }
 
     // Export source config
@@ -636,6 +649,64 @@ class App {
     if (container) container.classList.remove('hidden');
     if (code) code.textContent = content;
     if (label) label.textContent = title;
+  }
+
+  // --- Run export / import ---
+
+  private exportRuns(): void {
+    if (this.recordedRuns.length === 0) {
+      this.showError('No recorded runs to export');
+      return;
+    }
+    const json = JSON.stringify(this.recordedRuns, null, 2);
+    this.offerDownload(json, 'simulation-runs.json', 'application/json');
+    this.showToast(`Exported ${this.recordedRuns.length} run(s)`, 'success');
+  }
+
+  private async importRuns(e: Event): Promise<void> {
+    const input = e.target as HTMLInputElement;
+    if (!input.files?.length) return;
+
+    try {
+      const text = await input.files[0].text();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        throw new Error('File must contain a non-empty array of runs');
+      }
+      // Validate shape: each entry needs name + result with snapshots and summary
+      for (const run of parsed) {
+        if (!run.name || !run.result?.snapshots || !run.result?.summary) {
+          throw new Error('Invalid run format: each entry needs name, result.snapshots, result.summary');
+        }
+      }
+
+      // Enable recording mode if not already
+      const recordToggle = document.getElementById('record-runs') as HTMLInputElement;
+      if (recordToggle && !recordToggle.checked) {
+        recordToggle.checked = true;
+        recordToggle.dispatchEvent(new Event('change'));
+      }
+
+      // Append imported runs
+      this.recordedRuns = parsed;
+      this.runCounter = parsed.length;
+
+      // Re-render chart, summary, and log
+      this.chart.renderMultiRun('sim-chart', this.recordedRuns);
+      this.renderMultiRunSummary(this.recordedRuns);
+      this.renderMultiRunLog(this.recordedRuns);
+
+      // Show results section
+      const placeholder = document.getElementById('sim-placeholder');
+      const resultsContent = document.getElementById('sim-results-content');
+      if (placeholder) placeholder.classList.add('hidden');
+      if (resultsContent) resultsContent.classList.remove('hidden');
+
+      this.showToast(`Imported ${parsed.length} run(s)`, 'success');
+    } catch (err) {
+      this.showError('Import failed: ' + (err instanceof Error ? err.message : 'Invalid JSON'));
+    }
+    input.value = ''; // Reset for re-upload
   }
 
   // --- State management ---
