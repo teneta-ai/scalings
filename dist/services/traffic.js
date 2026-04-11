@@ -125,8 +125,12 @@ export class LocalTrafficPatternService {
  * Timestamps: epoch milliseconds, epoch seconds, or ISO 8601 strings.
  * Values are converted to relative seconds from the first data point.
  * Negative RPS values are clamped to 0.
+ *
+ * @param csv      Raw CSV text
+ * @param valueUnit Unit of the value column: 'rps' (default), 'rpm', or 'rph'.
+ *                  Non-RPS values are divided by 60 or 3600 to convert to RPS.
  */
-export function parseGrafanaCSV(csv) {
+export function parseGrafanaCSV(csv, valueUnit = 'rps') {
     const lines = csv.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
     if (lines.length < 2)
         throw new Error('CSV must have a header row and at least one data row');
@@ -161,7 +165,8 @@ export function parseGrafanaCSV(csv) {
         const ts = parseTimestamp(tsRaw);
         if (ts === null)
             continue;
-        raw.push({ ts, rps: Math.max(0, val) });
+        const divisor = valueUnit === 'rpm' ? 60 : valueUnit === 'rph' ? 3600 : 1;
+        raw.push({ ts, rps: Math.max(0, val / divisor) });
     }
     if (raw.length === 0)
         throw new Error('No valid data rows found in CSV');

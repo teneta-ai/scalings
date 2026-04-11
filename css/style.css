@@ -762,6 +762,18 @@ button:active, .btn:active {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.csv-import-row select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .csv-import-status {

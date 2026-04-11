@@ -36,6 +36,7 @@ export declare class UIControls {
     private bindFailureEventControls;
     private bindBrokerToggle;
     private bindRetryDelayTooltip;
+    private getCsvValueUnit;
     private bindCsvImport;
     private applyCsvImport;
     private selectPattern;

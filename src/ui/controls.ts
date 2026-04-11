@@ -351,7 +351,7 @@ export class UIControls {
       // Not JSON — try CSV parsing
     }
     try {
-      return parseGrafanaCSV(content);
+      return parseGrafanaCSV(content, this.getCsvValueUnit());
     } catch {
       // Not valid CSV either
     }
@@ -564,6 +564,13 @@ export class UIControls {
     update();
   }
 
+  private getCsvValueUnit(): 'rps' | 'rpm' | 'rph' {
+    const select = document.getElementById('csv-value-unit') as HTMLSelectElement;
+    const val = select?.value;
+    if (val === 'rpm' || val === 'rph') return val;
+    return 'rps';
+  }
+
   private bindCsvImport(): void {
     const importBtn = document.getElementById('btn-import-csv');
     const fileInput = document.getElementById('csv-file-input') as HTMLInputElement;
@@ -592,9 +599,11 @@ export class UIControls {
           // If it starts with a header-like row (not [ or {), try CSV parse
           if (content && !content.startsWith('[') && !content.startsWith('{')) {
             try {
-              const series = parseGrafanaCSV(content);
+              const unit = this.getCsvValueUnit();
+              const series = parseGrafanaCSV(content, unit);
               textarea.value = JSON.stringify(series, null, 2);
-              this.setCsvStatus(`Parsed ${series.length} points from CSV`, false);
+              const unitLabel = unit === 'rps' ? '' : ` (converted from ${unit.toUpperCase()})`;
+              this.setCsvStatus(`Parsed ${series.length} points from CSV${unitLabel}`, false);
               this.selectPattern('custom');
               this.notifyChange();
               this.updatePreview();
@@ -611,7 +620,8 @@ export class UIControls {
     const textarea = document.getElementById('traffic-custom-series') as HTMLTextAreaElement;
     if (!textarea) return;
 
-    const series = parseGrafanaCSV(csvText);
+    const unit = this.getCsvValueUnit();
+    const series = parseGrafanaCSV(csvText, unit);
     textarea.value = JSON.stringify(series, null, 2);
 
     // Auto-adjust simulation duration to match the series
@@ -622,7 +632,8 @@ export class UIControls {
     }
 
     this.selectPattern('custom');
-    this.setCsvStatus(`Imported ${series.length} data points`, false);
+    const unitLabel = unit === 'rps' ? '' : ` (converted from ${unit.toUpperCase()})`;
+    this.setCsvStatus(`Imported ${series.length} data points${unitLabel}`, false);
     this.notifyChange();
     this.updatePreview();
   }

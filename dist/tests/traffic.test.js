@@ -264,6 +264,32 @@ describe('parseGrafanaCSV — tab-separated', () => {
         assert.equal(result[1].t, 60);
     });
 });
+describe('parseGrafanaCSV — unit conversion', () => {
+    it('converts RPM values to RPS (divides by 60)', () => {
+        const csv = 'Time,Value\n1000000000,6000\n1000000060,3000';
+        const result = parseGrafanaCSV(csv, 'rpm');
+        assert.equal(result[0].rps, 100); // 6000 / 60
+        assert.equal(result[1].rps, 50); // 3000 / 60
+    });
+    it('converts RPH values to RPS (divides by 3600)', () => {
+        const csv = 'Time,Value\n1000000000,360000\n1000000060,7200';
+        const result = parseGrafanaCSV(csv, 'rph');
+        assert.equal(result[0].rps, 100); // 360000 / 3600
+        assert.equal(result[1].rps, 2); // 7200 / 3600
+    });
+    it('leaves RPS values unchanged (default)', () => {
+        const csv = 'Time,Value\n1000000000,42\n1000000060,55';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result[0].rps, 42);
+        assert.equal(result[1].rps, 55);
+    });
+    it('clamps converted negative values to 0', () => {
+        const csv = 'Time,Value\n1000000000,-120\n1000000060,600';
+        const result = parseGrafanaCSV(csv, 'rpm');
+        assert.equal(result[0].rps, 0); // -120/60 = -2, clamped to 0
+        assert.equal(result[1].rps, 10); // 600/60
+    });
+});
 describe('parseGrafanaCSV — edge cases', () => {
     it('clamps negative values to 0', () => {
         const csv = 'Time,Value\n1000000000,100\n1000000060,-50\n1000000120,200';

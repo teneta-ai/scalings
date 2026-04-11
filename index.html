@@ -246,6 +246,11 @@
           <textarea id="traffic-custom-series" aria-label="Custom traffic time series as JSON or pasted CSV" title="Enter a JSON array of {t, rps} objects, or paste a Grafana-exported CSV. CSV is auto-detected and converted.">[{"t": 0, "rps": 100}, {"t": 120, "rps": 500}, {"t": 300, "rps": 2000}, {"t": 450, "rps": 300}, {"t": 600, "rps": 100}]</textarea>
           <div class="csv-import-row">
             <button id="btn-import-csv" class="btn btn-small" title="Import a CSV file exported from Grafana (Inspect → Data → Download CSV)">Import Grafana CSV</button>
+            <select id="csv-value-unit" title="Unit of the values in your CSV. RPM and RPH are automatically converted to RPS for simulation.">
+              <option value="rps">Values are RPS</option>
+              <option value="rpm">Values are RPM</option>
+              <option value="rph">Values are RPH</option>
+            </select>
             <input type="file" id="csv-file-input" class="hidden-input" accept=".csv,.tsv,.txt">
             <span id="csv-import-status" class="csv-import-status"></span>
           </div>

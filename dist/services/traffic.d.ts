@@ -20,5 +20,9 @@ export declare class LocalTrafficPatternService implements TrafficPatternService
  * Timestamps: epoch milliseconds, epoch seconds, or ISO 8601 strings.
  * Values are converted to relative seconds from the first data point.
  * Negative RPS values are clamped to 0.
+ *
+ * @param csv      Raw CSV text
+ * @param valueUnit Unit of the value column: 'rps' (default), 'rpm', or 'rph'.
+ *                  Non-RPS values are divided by 60 or 3600 to convert to RPS.
  */
-export declare function parseGrafanaCSV(csv: string): CustomTimePoint[];
+export declare function parseGrafanaCSV(csv: string, valueUnit?: 'rps' | 'rpm' | 'rph'): CustomTimePoint[];
