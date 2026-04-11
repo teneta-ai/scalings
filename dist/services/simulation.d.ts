@@ -1,7 +1,10 @@
 import { SimulationService, SimulationConfig, SimulationResult, TrafficPatternService } from '../interfaces/types.js';
 export declare class LocalSimulationService implements SimulationService {
     private trafficService;
+    private runCounter;
     constructor(trafficService?: TrafficPatternService);
+    /** Generate a short unique run ID: counter + random hex suffix. */
+    private generateRunId;
     /** Simple seeded PRNG (mulberry32). Returns a function that produces values in [0, 1). */
     private createRng;
     run(config: SimulationConfig): Promise<SimulationResult>;

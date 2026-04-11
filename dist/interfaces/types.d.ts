@@ -126,6 +126,7 @@ export interface TickSnapshot {
     log_entries: string[];
 }
 export interface SimulationResult {
+    run_id: string;
     snapshots: TickSnapshot[];
     summary: SimulationSummary;
 }

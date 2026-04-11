@@ -44,6 +44,23 @@ describe('SimulationService — basic', () => {
         assert.ok(typeof result.summary.peak_pod_count === 'number');
         assert.ok(typeof result.summary.estimated_total_cost === 'number');
     });
+    it('returns a run_id string', async () => {
+        const config = makeConfig();
+        const result = await svc.run(config);
+        assert.ok(typeof result.run_id === 'string');
+        assert.ok(result.run_id.length > 0);
+        assert.ok(result.run_id.startsWith('run-'));
+    });
+    it('generates unique run_ids across runs', async () => {
+        const config = makeConfig();
+        const ids = new Set();
+        for (let i = 0; i < 5; i++) {
+            const result = await svc.run(config);
+            assert.ok(!ids.has(result.run_id), `Duplicate run_id: ${result.run_id}`);
+            ids.add(result.run_id);
+        }
+        assert.equal(ids.size, 5);
+    });
 });
 // ---------------------------------------------------------------------------
 // Low traffic — no drops, no scale-up
