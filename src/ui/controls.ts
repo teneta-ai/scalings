@@ -16,12 +16,16 @@ import {
   WaveParams,
   StepParams,
   CustomParams,
+  CustomTimePoint,
+  GrafanaParams,
   StepEntry,
   FailureEvent,
+  RetryStrategy,
   DEFAULT_CONFIG,
   PRESET_SCENARIOS,
 } from '../interfaces/types.js';
 import { TrafficPatternService } from '../interfaces/types.js';
+import { parseGrafanaCSV, detectCsvValueUnit } from '../services/traffic.js';
 import { TrafficPreviewRenderer } from './chart.js';
 
 type ChangeCallback = () => void;
@@ -31,6 +35,7 @@ export class UIControls {
   private previewRenderer: TrafficPreviewRenderer;
   private onChangeCallbacks: ChangeCallback[] = [];
   private currentPattern: TrafficPatternType = 'spike';
+  private pendingCsvText: string | null = null;
 
   constructor(trafficService: TrafficPatternService) {
     this.trafficService = trafficService;
@@ -48,6 +53,7 @@ export class UIControls {
     this.bindFailureEventControls();
     this.bindBrokerToggle();
     this.bindRetryDelayTooltip();
+    this.bindCsvImport();
     this.showPatternParams(this.currentPattern);
     this.updatePreview();
   }
@@ -120,15 +126,19 @@ export class UIControls {
   // --- Client config helpers ---
 
   private getClientConfig(): ClientConfig {
+    const strategySelect = document.getElementById('param-retry_strategy') as HTMLSelectElement;
     return {
       max_retries: this.getNumericValue('param-max_retries', DEFAULT_CONFIG.client.max_retries),
       retry_delay: this.getNumericValue('param-retry_delay', DEFAULT_CONFIG.client.retry_delay),
+      retry_strategy: (strategySelect?.value as RetryStrategy) || DEFAULT_CONFIG.client.retry_strategy,
     };
   }
 
   private setClientConfig(client: ClientConfig): void {
     this.setNumericValue('param-max_retries', client.max_retries);
     this.setNumericValue('param-retry_delay', client.retry_delay);
+    const strategySelect = document.getElementById('param-retry_strategy') as HTMLSelectElement;
+    if (strategySelect) strategySelect.value = client.retry_strategy || 'fixed';
   }
 
   // --- Broker config helpers ---
@@ -249,6 +259,9 @@ export class UIControls {
       case 'custom':
         params = { series: this.getCustomSeries() } as CustomParams;
         break;
+      case 'grafana':
+        params = this.getGrafanaParams();
+        break;
       default:
         params = DEFAULT_CONFIG.producer.traffic.params;
     }
@@ -298,6 +311,14 @@ export class UIControls {
         if (textarea) textarea.value = JSON.stringify(p.series, null, 2);
         break;
       }
+      case 'grafana': {
+        const p = traffic.params as GrafanaParams;
+        const csvTextarea = document.getElementById('grafana-csv-input') as HTMLTextAreaElement;
+        if (csvTextarea && p.raw_csv) csvTextarea.value = p.raw_csv;
+        this.setCsvValueUnit(p.value_unit || 'rps');
+        this.pendingCsvText = p.raw_csv || null;
+        break;
+      }
     }
   }
 
@@ -336,12 +357,26 @@ export class UIControls {
     if (!textarea) return [{ t: 0, rps: 100 }];
 
     try {
-      const parsed = JSON.parse(textarea.value);
+      const parsed = JSON.parse(textarea.value.trim());
       if (Array.isArray(parsed)) return parsed;
     } catch {
-      // Try line-by-line format
+      // Invalid JSON
     }
     return [{ t: 0, rps: 100 }, { t: 300, rps: 500 }, { t: 600, rps: 100 }];
+  }
+
+  private getGrafanaParams(): GrafanaParams {
+    const csvText = this.pendingCsvText || '';
+    const unit = this.getCsvValueUnit();
+    let series: CustomTimePoint[] = [];
+    if (csvText) {
+      try {
+        series = parseGrafanaCSV(csvText, unit);
+      } catch {
+        // Invalid CSV — empty series
+      }
+    }
+    return { series, raw_csv: csvText, value_unit: unit };
   }
 
   // --- DOM bindings ---
@@ -368,6 +403,14 @@ export class UIControls {
       });
     });
 
+    // Bind select elements in param rows (e.g., retry strategy)
+    const paramSelects = document.querySelectorAll('.param-row select');
+    paramSelects.forEach(select => {
+      select.addEventListener('change', () => {
+        this.notifyChange();
+      });
+    });
+
     // Also bind standalone number inputs (sim duration, tick interval)
     ['sim-duration', 'sim-tick'].forEach(id => {
       const input = document.getElementById(id) as HTMLInputElement;
@@ -386,6 +429,10 @@ export class UIControls {
       radio.addEventListener('change', (e) => {
         const target = e.target as HTMLInputElement;
         this.currentPattern = target.value as TrafficPatternType;
+        // Clear raw CSV when leaving grafana pattern — no longer needed
+        if (this.currentPattern !== 'grafana') {
+          this.pendingCsvText = null;
+        }
         this.showPatternParams(this.currentPattern);
         this.notifyChange();
         this.updatePreview();
@@ -540,6 +587,116 @@ export class UIControls {
     delayInput.addEventListener('input', update);
     tickInput.addEventListener('input', update);
     update();
+  }
+
+  private getCsvValueUnit(): 'rps' | 'rpm' | 'rph' {
+    const select = document.getElementById('csv-value-unit') as HTMLSelectElement;
+    const val = select?.value;
+    if (val === 'rpm' || val === 'rph') return val;
+    return 'rps';
+  }
+
+  private setCsvValueUnit(unit: 'rps' | 'rpm' | 'rph'): void {
+    const select = document.getElementById('csv-value-unit') as HTMLSelectElement;
+    if (select) select.value = unit;
+  }
+
+  private bindCsvImport(): void {
+    const importBtn = document.getElementById('btn-import-csv');
+    const fileInput = document.getElementById('csv-file-input') as HTMLInputElement;
+    const csvTextarea = document.getElementById('grafana-csv-input') as HTMLTextAreaElement;
+    const unitSelect = document.getElementById('csv-value-unit') as HTMLSelectElement;
+
+    if (importBtn && fileInput) {
+      importBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async () => {
+        if (!fileInput.files?.length) return;
+        try {
+          const text = await fileInput.files[0].text();
+          if (csvTextarea) csvTextarea.value = text;
+          this.applyCsvImport(text);
+        } catch (err) {
+          this.setCsvStatus(err instanceof Error ? err.message : 'Import failed', true);
+        }
+        fileInput.value = '';
+      });
+    }
+
+    // Re-parse with new unit when dropdown changes while raw CSV is in memory
+    if (unitSelect) {
+      unitSelect.addEventListener('change', () => {
+        if (this.pendingCsvText) {
+          this.reapplyCsvWithUnit(this.getCsvValueUnit());
+        }
+      });
+    }
+
+    // Parse CSV when pasting or typing into the grafana textarea
+    if (csvTextarea) {
+      const handleCsvInput = () => {
+        const content = csvTextarea.value.trim();
+        if (!content) {
+          this.pendingCsvText = null;
+          return;
+        }
+        try {
+          this.applyCsvImport(content);
+        } catch {
+          // Not valid CSV yet — user may still be typing
+        }
+      };
+      csvTextarea.addEventListener('paste', () => setTimeout(handleCsvInput, 0));
+      csvTextarea.addEventListener('change', handleCsvInput);
+    }
+  }
+
+  private applyCsvImport(csvText: string): void {
+    this.pendingCsvText = csvText;
+
+    const guess = detectCsvValueUnit(csvText);
+    this.setCsvValueUnit(guess.unit);
+
+    const series = this.applyGrafanaParse(csvText, guess.unit);
+    const unitLabel = guess.unit === 'rps' ? '' : ` as ${guess.unit.toUpperCase()}`;
+    this.setCsvStatus(`${series.length} points${unitLabel} — ${guess.reason}. Change unit if incorrect.`, false);
+  }
+
+  private reapplyCsvWithUnit(unit: 'rps' | 'rpm' | 'rph'): void {
+    if (!this.pendingCsvText) return;
+    const series = this.applyGrafanaParse(this.pendingCsvText, unit);
+    this.setCsvStatus(`Re-converted ${series.length} points as ${unit.toUpperCase()}.`, false);
+  }
+
+  private applyGrafanaParse(csvText: string, unit: 'rps' | 'rpm' | 'rph'): CustomTimePoint[] {
+    const series = parseGrafanaCSV(csvText, unit);
+
+    // Auto-adjust simulation duration to match the series
+    const lastT = series[series.length - 1].t;
+    if (lastT > 0) {
+      const durationInput = document.getElementById('sim-duration') as HTMLInputElement;
+      if (durationInput) durationInput.value = String(lastT);
+    }
+
+    this.notifyChange();
+    this.updatePreview();
+    return series;
+  }
+
+  private selectPattern(pattern: TrafficPatternType): void {
+    const radio = document.getElementById(`pattern-${pattern}`) as HTMLInputElement;
+    if (radio) {
+      radio.checked = true;
+      this.currentPattern = pattern;
+      this.showPatternParams(pattern);
+    }
+  }
+
+  private setCsvStatus(msg: string, isError: boolean): void {
+    const el = document.getElementById('csv-import-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `csv-import-status ${isError ? 'error' : 'success'}`;
+    setTimeout(() => { el.textContent = ''; el.className = 'csv-import-status'; }, 5000);
   }
 
   private updateBrokerSizeUI(input: HTMLInputElement): void {

@@ -21,6 +21,7 @@ export const DEFAULT_PRODUCER = {
 export const DEFAULT_CLIENT = {
     max_retries: 0,
     retry_delay: 0,
+    retry_strategy: 'fixed',
 };
 export const DEFAULT_BROKER = {
     enabled: false,
@@ -224,6 +225,7 @@ export const PRESET_SCENARIOS = [
             client: {
                 max_retries: 3,
                 retry_delay: 2,
+                retry_strategy: 'fixed',
             },
         },
     },
@@ -255,6 +257,7 @@ export const PRESET_SCENARIOS = [
             client: {
                 max_retries: 3,
                 retry_delay: 2,
+                retry_strategy: 'fixed',
             },
             broker: {
                 enabled: true,

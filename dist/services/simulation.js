@@ -49,7 +49,6 @@ export class LocalSimulationService {
         let queuedRequests = 0;
         // Retry queue: deferred batches with per-attempt counts
         const retryQueue = [];
-        const retryDelayTicks = Math.max(1, Math.ceil((client.retry_delay || 0) / simulation.tick_interval));
         // Utilization history for delayed observation
         const utilizationHistory = [];
         // Initialize with min replicas (already running)
@@ -257,9 +256,19 @@ export class LocalSimulationService {
                 // readyByAttempt[max_retries - 1] failures are permanently dropped (max reached)
                 const totalScheduled = nextRetries.reduce((a, b) => a + b, 0);
                 if (totalScheduled > 0) {
-                    retryQueue.push({ tick: tick + retryDelayTicks, counts: nextRetries });
-                    const delaySec = retryDelayTicks * simulation.tick_interval;
-                    logEntries.push(`${totalScheduled} requests will retry in ${delaySec}s (max ${client.max_retries} attempts)`);
+                    // Schedule each attempt level with its own delay based on strategy
+                    for (let k = 0; k < client.max_retries; k++) {
+                        if (nextRetries[k] <= 0)
+                            continue;
+                        const delayTicks = this.computeRetryDelay(k, client.retry_delay, client.retry_strategy, simulation.tick_interval, rng);
+                        const counts = new Array(client.max_retries).fill(0);
+                        counts[k] = nextRetries[k];
+                        retryQueue.push({ tick: tick + delayTicks, counts });
+                    }
+                    const minDelay = this.computeRetryDelay(0, client.retry_delay, client.retry_strategy, simulation.tick_interval, rng);
+                    const minDelaySec = minDelay * simulation.tick_interval;
+                    const strategyLabel = client.retry_strategy === 'fixed' ? '' : ` [${client.retry_strategy}]`;
+                    logEntries.push(`${totalScheduled} requests will retry in ${minDelaySec}s+ (max ${client.max_retries} attempts)${strategyLabel}`);
                 }
             }
             // Log drop transitions
@@ -391,6 +400,26 @@ export class LocalSimulationService {
         // Trim queue to the depth where wait_time = timeout
         const maxQueueForTimeout = Math.floor(capacity * broker.request_timeout_ms / 1000);
         return Math.max(0, queueDepth - maxQueueForTimeout);
+    }
+    /**
+     * Computes retry delay in ticks for a given attempt number and strategy.
+     * attempt is 0-indexed (0 = first retry, 1 = second retry, etc.).
+     */
+    computeRetryDelay(attempt, baseDelay, strategy, tickInterval, rng) {
+        let delaySec;
+        switch (strategy) {
+            case 'exponential':
+                delaySec = (baseDelay || tickInterval) * Math.pow(2, attempt);
+                break;
+            case 'exponential-jitter':
+                delaySec = (baseDelay || tickInterval) * Math.pow(2, attempt) * (0.5 + rng() * 0.5);
+                break;
+            case 'fixed':
+            default:
+                delaySec = baseDelay;
+                break;
+        }
+        return Math.max(1, Math.ceil(delaySec / tickInterval));
     }
     calculateSummary(snapshots, tickInterval) {
         let totalRequests = 0;

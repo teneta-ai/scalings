@@ -165,6 +165,9 @@
 
         <input type="radio" id="pattern-custom" name="traffic-pattern" value="custom">
         <label for="pattern-custom" class="pattern-label" title="Custom time-series of RPS values">Custom</label>
+
+        <input type="radio" id="pattern-grafana" name="traffic-pattern" value="grafana">
+        <label for="pattern-grafana" class="pattern-label" title="Import time-series CSV exported from Grafana">Import Grafana</label>
       </div>
 
       <div id="pattern-params">
@@ -242,8 +245,24 @@
 
         <!-- Custom -->
         <div id="custom-params" class="pattern-params">
-          <label for="traffic-custom-series" title="JSON array of time-series points">Time Series (JSON):</label>
-          <textarea id="traffic-custom-series" aria-label="Custom traffic time series as JSON" title="Enter a JSON array of {t, rps} objects">[{"t": 0, "rps": 100}, {"t": 120, "rps": 500}, {"t": 300, "rps": 2000}, {"t": 450, "rps": 300}, {"t": 600, "rps": 100}]</textarea>
+          <label for="traffic-custom-series" title="JSON array of {t, rps} time-series points">Time Series (JSON):</label>
+          <textarea id="traffic-custom-series" aria-label="Custom traffic time series as JSON" title="Enter a JSON array of {t, rps} objects. Each point defines an RPS value at a time offset in seconds.">[{"t": 0, "rps": 100}, {"t": 120, "rps": 500}, {"t": 300, "rps": 2000}, {"t": 450, "rps": 300}, {"t": 600, "rps": 100}]</textarea>
+        </div>
+
+        <!-- Grafana Import -->
+        <div id="grafana-params" class="pattern-params">
+          <div class="csv-import-row">
+            <button id="btn-import-csv" class="btn btn-small" title="Import a CSV file exported from Grafana (Inspect → Data → Download CSV)">Choose CSV File</button>
+            <span class="csv-import-or">or paste below</span>
+            <select id="csv-value-unit" title="Unit of the values in your CSV. Auto-detected on import. RPM and RPH are converted to RPS.">
+              <option value="rps">RPS</option>
+              <option value="rpm">RPM</option>
+              <option value="rph">RPH</option>
+            </select>
+            <input type="file" id="csv-file-input" class="hidden-input" accept=".csv,.tsv,.txt">
+          </div>
+          <textarea id="grafana-csv-input" class="grafana-csv-textarea" placeholder="Paste Grafana CSV here (Inspect → Data → Download CSV)&#10;&#10;Supported formats:&#10;  Series;Time;Value&#10;  Time,metric_name&#10;  Tab-separated" aria-label="Paste Grafana CSV data" title="Paste CSV exported from Grafana. Supports semicolon, comma, and tab separators. Timestamps can be epoch ms, epoch seconds, or ISO 8601."></textarea>
+          <span id="csv-import-status" class="csv-import-status"></span>
         </div>
       </div>
 
@@ -415,10 +434,21 @@
             </div>
 
             <div class="param-row">
-              <label for="param-retry_delay" title="Seconds between a failure and the retry attempt. 0 = retry on next tick.">Retry Delay</label>
-              <input type="number" id="param-retry_delay" min="0" max="60" value="0" aria-label="Retry delay" title="Seconds a client waits before retrying a failed request. 0 = immediate (next tick).">
+              <label for="param-retry_delay" title="Base seconds between a failure and the retry attempt. 0 = retry on next tick.">Retry Delay</label>
+              <input type="number" id="param-retry_delay" min="0" max="60" value="0" aria-label="Retry delay" title="Base seconds a client waits before retrying a failed request. For exponential strategies this is the base delay that doubles per attempt.">
               <span class="unit">s</span>
-              <button class="tooltip-btn" data-tooltip="Seconds between a request failing and the client retrying it. Models backoff behavior. 0 = retry on the very next tick (aggressive). Higher values spread retries over time, reducing the spike but prolonging the storm.">?</button>
+              <button class="tooltip-btn" data-tooltip="Base seconds between a request failing and the client retrying it. For fixed strategy, every attempt waits this long. For exponential, delay = base × 2^attempt. For exponential+jitter, a random factor (0.5–1×) is applied on top. 0 = 1 tick minimum.">?</button>
+            </div>
+
+            <div class="param-row">
+              <label for="param-retry_strategy" title="How retry delay scales with each successive attempt.">Retry Strategy</label>
+              <select id="param-retry_strategy" aria-label="Retry strategy" title="Fixed: same delay every attempt. Exponential: delay doubles per attempt (2s, 4s, 8s…). Exponential+Jitter: exponential with random variation to prevent thundering herd.">
+                <option value="fixed">Fixed</option>
+                <option value="exponential">Exponential Backoff</option>
+                <option value="exponential-jitter">Exponential + Jitter</option>
+              </select>
+              <span class="unit"></span>
+              <button class="tooltip-btn" data-tooltip="Fixed: every retry waits the same base delay. Exponential backoff: delay doubles with each attempt (base × 2^attempt), spreading retries over time. Exponential + Jitter: adds random variation (50–100% of exponential delay) to prevent synchronized retry waves (thundering herd).">?</button>
             </div>
           </fieldset>
         </div>

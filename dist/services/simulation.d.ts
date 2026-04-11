@@ -26,5 +26,10 @@ export declare class LocalSimulationService implements SimulationService {
      * Returns the number of requests expired.
      */
     private expireQueuedRequests;
+    /**
+     * Computes retry delay in ticks for a given attempt number and strategy.
+     * attempt is 0-indexed (0 = first retry, 1 = second retry, etc.).
+     */
+    private computeRetryDelay;
     private calculateSummary;
 }

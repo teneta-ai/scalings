@@ -2,11 +2,13 @@
 // scalings.xyz — UI Controls (Form State, Input Bindings)
 // ============================================================================
 import { DEFAULT_CONFIG, PRESET_SCENARIOS, } from '../interfaces/types.js';
+import { parseGrafanaCSV, detectCsvValueUnit } from '../services/traffic.js';
 import { TrafficPreviewRenderer } from './chart.js';
 export class UIControls {
     constructor(trafficService) {
         this.onChangeCallbacks = [];
         this.currentPattern = 'spike';
+        this.pendingCsvText = null;
         this.trafficService = trafficService;
         this.previewRenderer = new TrafficPreviewRenderer();
     }
@@ -21,6 +23,7 @@ export class UIControls {
         this.bindFailureEventControls();
         this.bindBrokerToggle();
         this.bindRetryDelayTooltip();
+        this.bindCsvImport();
         this.showPatternParams(this.currentPattern);
         this.updatePreview();
     }
@@ -76,14 +79,19 @@ export class UIControls {
     }
     // --- Client config helpers ---
     getClientConfig() {
+        const strategySelect = document.getElementById('param-retry_strategy');
         return {
             max_retries: this.getNumericValue('param-max_retries', DEFAULT_CONFIG.client.max_retries),
             retry_delay: this.getNumericValue('param-retry_delay', DEFAULT_CONFIG.client.retry_delay),
+            retry_strategy: strategySelect?.value || DEFAULT_CONFIG.client.retry_strategy,
         };
     }
     setClientConfig(client) {
         this.setNumericValue('param-max_retries', client.max_retries);
         this.setNumericValue('param-retry_delay', client.retry_delay);
+        const strategySelect = document.getElementById('param-retry_strategy');
+        if (strategySelect)
+            strategySelect.value = client.retry_strategy || 'fixed';
     }
     // --- Broker config helpers ---
     getBrokerConfig() {
@@ -197,6 +205,9 @@ export class UIControls {
             case 'custom':
                 params = { series: this.getCustomSeries() };
                 break;
+            case 'grafana':
+                params = this.getGrafanaParams();
+                break;
             default:
                 params = DEFAULT_CONFIG.producer.traffic.params;
         }
@@ -243,6 +254,15 @@ export class UIControls {
                     textarea.value = JSON.stringify(p.series, null, 2);
                 break;
             }
+            case 'grafana': {
+                const p = traffic.params;
+                const csvTextarea = document.getElementById('grafana-csv-input');
+                if (csvTextarea && p.raw_csv)
+                    csvTextarea.value = p.raw_csv;
+                this.setCsvValueUnit(p.value_unit || 'rps');
+                this.pendingCsvText = p.raw_csv || null;
+                break;
+            }
         }
     }
     getStepEntries() {
@@ -277,14 +297,28 @@ export class UIControls {
         if (!textarea)
             return [{ t: 0, rps: 100 }];
         try {
-            const parsed = JSON.parse(textarea.value);
+            const parsed = JSON.parse(textarea.value.trim());
             if (Array.isArray(parsed))
                 return parsed;
         }
         catch {
-            // Try line-by-line format
+            // Invalid JSON
         }
         return [{ t: 0, rps: 100 }, { t: 300, rps: 500 }, { t: 600, rps: 100 }];
+    }
+    getGrafanaParams() {
+        const csvText = this.pendingCsvText || '';
+        const unit = this.getCsvValueUnit();
+        let series = [];
+        if (csvText) {
+            try {
+                series = parseGrafanaCSV(csvText, unit);
+            }
+            catch {
+                // Invalid CSV — empty series
+            }
+        }
+        return { series, raw_csv: csvText, value_unit: unit };
     }
     // --- DOM bindings ---
     bindSliders() {
@@ -308,6 +342,13 @@ export class UIControls {
                 this.updatePreview();
             });
         });
+        // Bind select elements in param rows (e.g., retry strategy)
+        const paramSelects = document.querySelectorAll('.param-row select');
+        paramSelects.forEach(select => {
+            select.addEventListener('change', () => {
+                this.notifyChange();
+            });
+        });
         // Also bind standalone number inputs (sim duration, tick interval)
         ['sim-duration', 'sim-tick'].forEach(id => {
             const input = document.getElementById(id);
@@ -325,6 +366,10 @@ export class UIControls {
             radio.addEventListener('change', (e) => {
                 const target = e.target;
                 this.currentPattern = target.value;
+                // Clear raw CSV when leaving grafana pattern — no longer needed
+                if (this.currentPattern !== 'grafana') {
+                    this.pendingCsvText = null;
+                }
                 this.showPatternParams(this.currentPattern);
                 this.notifyChange();
                 this.updatePreview();
@@ -466,6 +511,110 @@ export class UIControls {
         delayInput.addEventListener('input', update);
         tickInput.addEventListener('input', update);
         update();
+    }
+    getCsvValueUnit() {
+        const select = document.getElementById('csv-value-unit');
+        const val = select?.value;
+        if (val === 'rpm' || val === 'rph')
+            return val;
+        return 'rps';
+    }
+    setCsvValueUnit(unit) {
+        const select = document.getElementById('csv-value-unit');
+        if (select)
+            select.value = unit;
+    }
+    bindCsvImport() {
+        const importBtn = document.getElementById('btn-import-csv');
+        const fileInput = document.getElementById('csv-file-input');
+        const csvTextarea = document.getElementById('grafana-csv-input');
+        const unitSelect = document.getElementById('csv-value-unit');
+        if (importBtn && fileInput) {
+            importBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', async () => {
+                if (!fileInput.files?.length)
+                    return;
+                try {
+                    const text = await fileInput.files[0].text();
+                    if (csvTextarea)
+                        csvTextarea.value = text;
+                    this.applyCsvImport(text);
+                }
+                catch (err) {
+                    this.setCsvStatus(err instanceof Error ? err.message : 'Import failed', true);
+                }
+                fileInput.value = '';
+            });
+        }
+        // Re-parse with new unit when dropdown changes while raw CSV is in memory
+        if (unitSelect) {
+            unitSelect.addEventListener('change', () => {
+                if (this.pendingCsvText) {
+                    this.reapplyCsvWithUnit(this.getCsvValueUnit());
+                }
+            });
+        }
+        // Parse CSV when pasting or typing into the grafana textarea
+        if (csvTextarea) {
+            const handleCsvInput = () => {
+                const content = csvTextarea.value.trim();
+                if (!content) {
+                    this.pendingCsvText = null;
+                    return;
+                }
+                try {
+                    this.applyCsvImport(content);
+                }
+                catch {
+                    // Not valid CSV yet — user may still be typing
+                }
+            };
+            csvTextarea.addEventListener('paste', () => setTimeout(handleCsvInput, 0));
+            csvTextarea.addEventListener('change', handleCsvInput);
+        }
+    }
+    applyCsvImport(csvText) {
+        this.pendingCsvText = csvText;
+        const guess = detectCsvValueUnit(csvText);
+        this.setCsvValueUnit(guess.unit);
+        const series = this.applyGrafanaParse(csvText, guess.unit);
+        const unitLabel = guess.unit === 'rps' ? '' : ` as ${guess.unit.toUpperCase()}`;
+        this.setCsvStatus(`${series.length} points${unitLabel} — ${guess.reason}. Change unit if incorrect.`, false);
+    }
+    reapplyCsvWithUnit(unit) {
+        if (!this.pendingCsvText)
+            return;
+        const series = this.applyGrafanaParse(this.pendingCsvText, unit);
+        this.setCsvStatus(`Re-converted ${series.length} points as ${unit.toUpperCase()}.`, false);
+    }
+    applyGrafanaParse(csvText, unit) {
+        const series = parseGrafanaCSV(csvText, unit);
+        // Auto-adjust simulation duration to match the series
+        const lastT = series[series.length - 1].t;
+        if (lastT > 0) {
+            const durationInput = document.getElementById('sim-duration');
+            if (durationInput)
+                durationInput.value = String(lastT);
+        }
+        this.notifyChange();
+        this.updatePreview();
+        return series;
+    }
+    selectPattern(pattern) {
+        const radio = document.getElementById(`pattern-${pattern}`);
+        if (radio) {
+            radio.checked = true;
+            this.currentPattern = pattern;
+            this.showPatternParams(pattern);
+        }
+    }
+    setCsvStatus(msg, isError) {
+        const el = document.getElementById('csv-import-status');
+        if (!el)
+            return;
+        el.textContent = msg;
+        el.className = `csv-import-status ${isError ? 'error' : 'success'}`;
+        setTimeout(() => { el.textContent = ''; el.className = 'csv-import-status'; }, 5000);
     }
     updateBrokerSizeUI(input) {
         const isUnlimited = parseFloat(input.value) === 0;

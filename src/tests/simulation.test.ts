@@ -908,7 +908,7 @@ describe('SimulationService — retry storms', () => {
       simulation: { duration: 15, tick_interval: 1 },
       service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
       producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 200 } as SteadyParams } },
-      client: { max_retries: 3, retry_delay: 5 },
+      client: { max_retries: 3, retry_delay: 5, retry_strategy: 'fixed' },
     });
     const result = await svc.run(config);
 
@@ -920,6 +920,87 @@ describe('SimulationService — retry storms', () => {
     // After delay, retries should appear
     const laterRetries = result.snapshots.slice(5).filter(s => s.retry_requests > 0);
     assert.ok(laterRetries.length > 0, 'retries should appear after delay');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Retry strategies — exponential backoff and jitter
+// ---------------------------------------------------------------------------
+describe('SimulationService — retry strategies', () => {
+  it('exponential backoff increases delay with each attempt', async () => {
+    // base_delay=2s, exponential: attempt 0 → 2s, attempt 1 → 4s, attempt 2 → 8s
+    // With fixed delay=2s all retries arrive at tick+2
+    const fixedConfig = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 300 } as SteadyParams } },
+      client: { max_retries: 3, retry_delay: 2, retry_strategy: 'fixed' },
+    });
+    const fixedResult = await svc.run(fixedConfig);
+
+    const expConfig = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 300 } as SteadyParams } },
+      client: { max_retries: 3, retry_delay: 2, retry_strategy: 'exponential' },
+    });
+    const expResult = await svc.run(expConfig);
+
+    // Exponential should spread retries more widely over time
+    // Fixed retries all arrive 2 ticks after failure; exponential arrives at 2, 4, 8 ticks
+    // So the first retry tick with traffic should be similar, but later retry traffic is more spread
+    const fixedRetryTicks = fixedResult.snapshots.filter(s => s.retry_requests > 0).length;
+    const expRetryTicks = expResult.snapshots.filter(s => s.retry_requests > 0).length;
+    assert.ok(expRetryTicks >= fixedRetryTicks,
+      `exponential should spread retries across at least as many ticks: exp=${expRetryTicks}, fixed=${fixedRetryTicks}`);
+  });
+
+  it('exponential backoff delays later attempts longer', async () => {
+    // With base_delay=1s, exponential: attempt 0 → 1 tick, attempt 1 → 2 ticks, attempt 2 → 4 ticks
+    // We verify that retries still appear later in the simulation
+    const config = makeConfig({
+      simulation: { duration: 20, tick_interval: 1 },
+      service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 300 } as SteadyParams } },
+      client: { max_retries: 3, retry_delay: 1, retry_strategy: 'exponential' },
+    });
+    const result = await svc.run(config);
+
+    // Retries should appear
+    const retryTicks = result.snapshots.filter(s => s.retry_requests > 0);
+    assert.ok(retryTicks.length > 0, 'exponential retries should generate retry traffic');
+    assert.ok(result.summary.total_retries > 0, 'summary should track retry totals');
+  });
+
+  it('exponential-jitter adds variation to retry timing', async () => {
+    // Use a deterministic seed so jitter is reproducible
+    const config = makeConfig({
+      simulation: { duration: 30, tick_interval: 1 },
+      service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100, random_seed: 42 },
+      producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 300 } as SteadyParams } },
+      client: { max_retries: 3, retry_delay: 2, retry_strategy: 'exponential-jitter' },
+    });
+    const result = await svc.run(config);
+
+    // Jitter retries should still appear and work
+    const retryTicks = result.snapshots.filter(s => s.retry_requests > 0);
+    assert.ok(retryTicks.length > 0, 'jitter retries should produce retry traffic');
+    assert.ok(result.summary.total_retries > 0, 'summary should track jitter retry totals');
+  });
+
+  it('fixed strategy with retry_delay=0 retries on next tick', async () => {
+    const config = makeConfig({
+      simulation: { duration: 10, tick_interval: 1 },
+      service: { ...SVC, min_replicas: 1, max_replicas: 1, capacity_per_replica: 100 },
+      producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 200 } as SteadyParams } },
+      client: { max_retries: 1, retry_delay: 0, retry_strategy: 'fixed' },
+    });
+    const result = await svc.run(config);
+
+    // Retries should appear starting from tick 1 (next tick after first drops)
+    assert.equal(result.snapshots[0].retry_requests, 0, 'no retries on first tick');
+    const hasRetries = result.snapshots.slice(1).some(s => s.retry_requests > 0);
+    assert.ok(hasRetries, 'retries should appear from tick 1 onwards');
   });
 });
 

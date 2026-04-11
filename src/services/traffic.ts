@@ -11,6 +11,8 @@ import {
   WaveParams,
   StepParams,
   CustomParams,
+  CustomTimePoint,
+  GrafanaParams,
 } from '../interfaces/types.js';
 
 export class LocalTrafficPatternService implements TrafficPatternService {
@@ -46,6 +48,8 @@ export class LocalTrafficPatternService implements TrafficPatternService {
         return this.step(traffic.params as StepParams, t);
       case 'custom':
         return this.custom(traffic.params as CustomParams, t);
+      case 'grafana':
+        return this.custom(traffic.params as GrafanaParams, t);
       default:
         return 0;
     }
@@ -131,8 +135,193 @@ export class LocalTrafficPatternService implements TrafficPatternService {
         }
         return 600;
       }
+      case 'grafana': {
+        const p = traffic.params as GrafanaParams;
+        if (p.series && p.series.length > 0) {
+          return p.series[p.series.length - 1].t;
+        }
+        return 600;
+      }
       default:
         return 600;
     }
   }
+}
+
+// ============================================================================
+// Grafana CSV Import — parse exported time-series into CustomTimePoint[]
+// ============================================================================
+
+/**
+ * Parse a Grafana-exported CSV into CustomTimePoint[].
+ * Supports common Grafana export formats:
+ *   - "Series;Time;Value" (panel CSV download, semicolon-separated)
+ *   - "Time,Value" or "Time,MetricName" (Inspect → Data → Download CSV)
+ *   - Tab-separated variants
+ * Timestamps: epoch milliseconds, epoch seconds, or ISO 8601 strings.
+ * Values are converted to relative seconds from the first data point.
+ * Negative RPS values are clamped to 0.
+ *
+ * @param csv      Raw CSV text
+ * @param valueUnit Unit of the value column: 'rps' (default), 'rpm', or 'rph'.
+ *                  Non-RPS values are divided by 60 or 3600 to convert to RPS.
+ */
+export function parseGrafanaCSV(csv: string, valueUnit: 'rps' | 'rpm' | 'rph' = 'rps'): CustomTimePoint[] {
+  const lines = csv.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error('CSV must have a header row and at least one data row');
+
+  // Detect separator: semicolon, comma, or tab
+  const header = lines[0];
+  const sep = header.includes(';') ? ';' : header.includes('\t') ? '\t' : ',';
+  const headerCols = parseCsvRow(header, sep);
+
+  // Identify column indices — case-insensitive, handle quoted headers
+  const colNames = headerCols.map(c => c.toLowerCase().trim());
+  const timeIdx = colNames.findIndex(c => c === 'time' || c === 'timestamp');
+  if (timeIdx === -1) throw new Error('CSV must have a "Time" or "Timestamp" column');
+
+  // Value column: explicit "Value"/"value" column, or first numeric column that isn't Time
+  let valueIdx = colNames.findIndex(c => c === 'value' || c === 'values');
+  if (valueIdx === -1) {
+    // Pick the first column that isn't "time", "timestamp", or "series"/"name"
+    valueIdx = colNames.findIndex((c, i) => i !== timeIdx && c !== 'series' && c !== 'name' && c !== 'metric');
+  }
+  if (valueIdx === -1) throw new Error('CSV must have at least one value column besides Time');
+
+  // Parse data rows
+  const raw: { ts: number; rps: number }[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvRow(lines[i], sep);
+    if (cols.length <= Math.max(timeIdx, valueIdx)) continue;
+
+    const tsRaw = cols[timeIdx].trim();
+    const valRaw = cols[valueIdx].trim();
+    const val = parseFloat(valRaw);
+    if (isNaN(val)) continue;
+
+    const ts = parseTimestamp(tsRaw);
+    if (ts === null) continue;
+
+    const divisor = valueUnit === 'rpm' ? 60 : valueUnit === 'rph' ? 3600 : 1;
+    raw.push({ ts, rps: Math.max(0, val / divisor) });
+  }
+
+  if (raw.length === 0) throw new Error('No valid data rows found in CSV');
+
+  // Sort by timestamp and convert to relative seconds from t=0
+  raw.sort((a, b) => a.ts - b.ts);
+  const t0 = raw[0].ts;
+
+  return raw.map(r => ({
+    t: Math.round(r.ts - t0),
+    rps: Math.round(r.rps * 100) / 100,
+  }));
+}
+
+export interface CsvUnitGuess {
+  unit: 'rps' | 'rpm' | 'rph';
+  reason: string;
+}
+
+/**
+ * Guess the value unit of a Grafana CSV based on the column name and value magnitudes.
+ * Returns a guess with a human-readable reason. The caller should display the reason
+ * and let the user override if wrong.
+ */
+export function detectCsvValueUnit(csv: string): CsvUnitGuess {
+  const lines = csv.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) return { unit: 'rps', reason: 'too few rows to guess' };
+
+  const header = lines[0];
+  const sep = header.includes(';') ? ';' : header.includes('\t') ? '\t' : ',';
+  const headerCols = parseCsvRow(header, sep);
+  const colNames = headerCols.map(c => c.toLowerCase().trim());
+
+  const timeIdx = colNames.findIndex(c => c === 'time' || c === 'timestamp');
+  if (timeIdx === -1) return { unit: 'rps', reason: 'no Time column found' };
+
+  let valueIdx = colNames.findIndex(c => c === 'value' || c === 'values');
+  if (valueIdx === -1) {
+    valueIdx = colNames.findIndex((c, i) => i !== timeIdx && c !== 'series' && c !== 'name' && c !== 'metric');
+  }
+  if (valueIdx === -1) return { unit: 'rps', reason: 'no value column found' };
+
+  // --- Heuristic 1: Column name keywords ---
+  const colName = colNames[valueIdx];
+  const rphPatterns = /(?:^|[_.\s/])rph(?:$|[_.\s])|per[_.\s]?hour|\/h(?:our)?(?:$|[_.\s])/;
+  const rpmPatterns = /(?:^|[_.\s/])rpm(?:$|[_.\s])|per[_.\s]?min|\/min/;
+  const rpsPatterns = /(?:^|[_.\s/])rps(?:$|[_.\s])|per[_.\s]?sec|\/s(?:ec)?(?:$|[_.\s])/;
+
+  if (rphPatterns.test(colName)) {
+    return { unit: 'rph', reason: `column "${headerCols[valueIdx].trim()}" suggests requests/hour` };
+  }
+  if (rpmPatterns.test(colName)) {
+    return { unit: 'rpm', reason: `column "${headerCols[valueIdx].trim()}" suggests requests/min` };
+  }
+  if (rpsPatterns.test(colName)) {
+    return { unit: 'rps', reason: `column "${headerCols[valueIdx].trim()}" suggests requests/sec` };
+  }
+
+  // --- Heuristic 2: Value magnitude ---
+  // Sample up to 100 values to compute the median
+  const values: number[] = [];
+  const sampleLimit = Math.min(lines.length, 101);
+  for (let i = 1; i < sampleLimit; i++) {
+    const cols = parseCsvRow(lines[i], sep);
+    if (cols.length <= valueIdx) continue;
+    const val = parseFloat(cols[valueIdx].trim());
+    if (!isNaN(val) && val > 0) values.push(val);
+  }
+
+  if (values.length === 0) return { unit: 'rps', reason: 'no numeric values to analyze' };
+
+  values.sort((a, b) => a - b);
+  const median = values[Math.floor(values.length / 2)];
+
+  // Conservative thresholds: only guess non-RPS when values are clearly too large
+  // A typical service might do 1–10,000 RPS; RPM values would be 60–600,000
+  if (median > 100_000) {
+    return { unit: 'rph', reason: `median value ${Math.round(median).toLocaleString()} suggests requests/hour` };
+  }
+  if (median > 5_000) {
+    return { unit: 'rpm', reason: `median value ${Math.round(median).toLocaleString()} suggests requests/min` };
+  }
+
+  return { unit: 'rps', reason: 'values look like requests/sec' };
+}
+
+/** Parse a single CSV row respecting quoted fields. */
+function parseCsvRow(row: string, sep: string): string[] {
+  const cols: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === sep && !inQuotes) {
+      cols.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  cols.push(current);
+  return cols;
+}
+
+/** Parse a timestamp string into epoch seconds. */
+function parseTimestamp(raw: string): number | null {
+  // Try numeric (epoch ms or epoch seconds)
+  const num = Number(raw);
+  if (!isNaN(num) && isFinite(num)) {
+    // If > 1e12 it's milliseconds, else seconds
+    return num > 1e12 ? num / 1000 : num;
+  }
+  // Try ISO 8601 / date string
+  const d = new Date(raw);
+  if (!isNaN(d.getTime())) {
+    return d.getTime() / 1000;
+  }
+  return null;
 }

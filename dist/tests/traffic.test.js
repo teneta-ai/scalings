@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { LocalTrafficPatternService } from '../services/traffic.js';
+import { LocalTrafficPatternService, parseGrafanaCSV, detectCsvValueUnit } from '../services/traffic.js';
 const svc = new LocalTrafficPatternService();
 // ---------------------------------------------------------------------------
 // Steady
@@ -201,6 +201,192 @@ describe('TrafficPatternService — edge cases', () => {
         };
         const data = svc.generate(traffic, 60, 5);
         assert.equal(data.length, 12); // 60 / 5
+    });
+});
+// ---------------------------------------------------------------------------
+// Grafana CSV import
+// ---------------------------------------------------------------------------
+describe('parseGrafanaCSV — semicolon-separated (panel export)', () => {
+    it('parses Series;Time;Value format with epoch ms timestamps', () => {
+        const csv = [
+            'Series;Time;Value',
+            '"cpu_usage";1706745600000;42.5',
+            '"cpu_usage";1706745660000;55.3',
+            '"cpu_usage";1706745720000;38.1',
+        ].join('\n');
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result.length, 3);
+        assert.equal(result[0].t, 0);
+        assert.equal(result[0].rps, 42.5);
+        assert.equal(result[1].t, 60);
+        assert.equal(result[1].rps, 55.3);
+        assert.equal(result[2].t, 120);
+        assert.equal(result[2].rps, 38.1);
+    });
+});
+describe('parseGrafanaCSV — comma-separated (Inspect > Data export)', () => {
+    it('parses Time,MetricName format with ISO timestamps', () => {
+        const csv = [
+            'Time,request_rate',
+            '2024-01-31T16:00:00.000Z,100',
+            '2024-01-31T16:01:00.000Z,200',
+            '2024-01-31T16:02:00.000Z,150',
+        ].join('\n');
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result.length, 3);
+        assert.equal(result[0].t, 0);
+        assert.equal(result[0].rps, 100);
+        assert.equal(result[1].t, 60);
+        assert.equal(result[1].rps, 200);
+        assert.equal(result[2].t, 120);
+        assert.equal(result[2].rps, 150);
+    });
+    it('parses Time,Value format with epoch seconds', () => {
+        const csv = [
+            'Time,Value',
+            '1706745600,500',
+            '1706745660,600',
+            '1706745720,550',
+        ].join('\n');
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result.length, 3);
+        assert.equal(result[0].t, 0);
+        assert.equal(result[1].t, 60);
+        assert.equal(result[2].t, 120);
+    });
+});
+describe('parseGrafanaCSV — tab-separated', () => {
+    it('parses tab-separated format', () => {
+        const csv = 'Time\tValue\n1706745600000\t42\n1706745660000\t55';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result.length, 2);
+        assert.equal(result[0].t, 0);
+        assert.equal(result[1].t, 60);
+    });
+});
+describe('parseGrafanaCSV — unit conversion', () => {
+    it('converts RPM values to RPS (divides by 60)', () => {
+        const csv = 'Time,Value\n1000000000,6000\n1000000060,3000';
+        const result = parseGrafanaCSV(csv, 'rpm');
+        assert.equal(result[0].rps, 100); // 6000 / 60
+        assert.equal(result[1].rps, 50); // 3000 / 60
+    });
+    it('converts RPH values to RPS (divides by 3600)', () => {
+        const csv = 'Time,Value\n1000000000,360000\n1000000060,7200';
+        const result = parseGrafanaCSV(csv, 'rph');
+        assert.equal(result[0].rps, 100); // 360000 / 3600
+        assert.equal(result[1].rps, 2); // 7200 / 3600
+    });
+    it('leaves RPS values unchanged (default)', () => {
+        const csv = 'Time,Value\n1000000000,42\n1000000060,55';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result[0].rps, 42);
+        assert.equal(result[1].rps, 55);
+    });
+    it('clamps converted negative values to 0', () => {
+        const csv = 'Time,Value\n1000000000,-120\n1000000060,600';
+        const result = parseGrafanaCSV(csv, 'rpm');
+        assert.equal(result[0].rps, 0); // -120/60 = -2, clamped to 0
+        assert.equal(result[1].rps, 10); // 600/60
+    });
+});
+describe('parseGrafanaCSV — edge cases', () => {
+    it('clamps negative values to 0', () => {
+        const csv = 'Time,Value\n1000000000,100\n1000000060,-50\n1000000120,200';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result[1].rps, 0);
+    });
+    it('sorts by timestamp', () => {
+        const csv = 'Time,Value\n1000000120,300\n1000000000,100\n1000000060,200';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result[0].t, 0);
+        assert.equal(result[0].rps, 100);
+        assert.equal(result[1].t, 60);
+        assert.equal(result[1].rps, 200);
+        assert.equal(result[2].t, 120);
+        assert.equal(result[2].rps, 300);
+    });
+    it('skips rows with non-numeric values', () => {
+        const csv = 'Time,Value\n1000000000,100\n1000000060,N/A\n1000000120,200';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result.length, 2);
+    });
+    it('throws on missing Time column', () => {
+        const csv = 'Series,Value\nfoo,100\nbar,200';
+        assert.throws(() => parseGrafanaCSV(csv), /Time/);
+    });
+    it('throws on too few rows', () => {
+        const csv = 'Time,Value';
+        assert.throws(() => parseGrafanaCSV(csv), /header.*data/i);
+    });
+    it('throws on no valid data rows', () => {
+        const csv = 'Time,Value\nbadtime,notanumber';
+        assert.throws(() => parseGrafanaCSV(csv), /No valid/);
+    });
+    it('handles Windows-style line endings', () => {
+        const csv = 'Time,Value\r\n1000000000,100\r\n1000000060,200\r\n';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result.length, 2);
+    });
+    it('handles quoted headers', () => {
+        const csv = '"Time";"Value"\n1000000000;100\n1000000060;200';
+        const result = parseGrafanaCSV(csv);
+        assert.equal(result.length, 2);
+        assert.equal(result[0].t, 0);
+        assert.equal(result[1].t, 60);
+    });
+});
+// ---------------------------------------------------------------------------
+// Auto-detect CSV value unit
+// ---------------------------------------------------------------------------
+describe('detectCsvValueUnit — column name detection', () => {
+    it('detects RPM from column name containing "rpm"', () => {
+        const csv = 'Time,http_requests_rpm\n1000000000,6000\n1000000060,3000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+        assert.ok(guess.reason.includes('requests/min'));
+    });
+    it('detects RPM from column name containing "per_minute"', () => {
+        const csv = 'Time,requests_per_minute\n1000000000,6000\n1000000060,3000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+    });
+    it('detects RPH from column name containing "/hour"', () => {
+        const csv = 'Time,requests/hour\n1000000000,360000\n1000000060,180000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rph');
+        assert.ok(guess.reason.includes('requests/hour'));
+    });
+    it('detects RPS from column name containing "rps"', () => {
+        const csv = 'Time,http_rps\n1000000000,100\n1000000060,200';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps');
+        assert.ok(guess.reason.includes('requests/sec'));
+    });
+});
+describe('detectCsvValueUnit — magnitude detection', () => {
+    it('guesses RPM when median value > 5000', () => {
+        const csv = 'Time,Value\n1000000000,12000\n1000000060,8000\n1000000120,15000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+        assert.ok(guess.reason.includes('median'));
+    });
+    it('guesses RPH when median value > 100000', () => {
+        const csv = 'Time,Value\n1000000000,360000\n1000000060,200000\n1000000120,500000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rph');
+        assert.ok(guess.reason.includes('median'));
+    });
+    it('guesses RPS when median value is small', () => {
+        const csv = 'Time,Value\n1000000000,100\n1000000060,200\n1000000120,150';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps');
+    });
+    it('column name takes priority over magnitude', () => {
+        // Column says "rps" but values are huge — trust the column name
+        const csv = 'Time,high_throughput_rps\n1000000000,50000\n1000000060,60000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps');
     });
 });
 //# sourceMappingURL=traffic.test.js.map

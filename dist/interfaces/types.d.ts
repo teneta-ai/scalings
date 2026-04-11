@@ -1,6 +1,6 @@
 export type Platform = 'kubernetes-hpa' | 'aws-asg' | 'gcp-mig' | 'custom';
 export type TargetFormat = 'kubernetes-yaml' | 'cloudformation' | 'terraform' | 'gcloud-cli';
-export type TrafficPatternType = 'steady' | 'gradual' | 'spike' | 'wave' | 'step' | 'custom';
+export type TrafficPatternType = 'steady' | 'gradual' | 'spike' | 'wave' | 'step' | 'custom' | 'grafana';
 export interface SimulationParams {
     duration: number;
     tick_interval: number;
@@ -8,9 +8,11 @@ export interface SimulationParams {
 export interface ProducerConfig {
     traffic: TrafficConfig;
 }
+export type RetryStrategy = 'fixed' | 'exponential' | 'exponential-jitter';
 export interface ClientConfig {
     max_retries: number;
     retry_delay: number;
+    retry_strategy: RetryStrategy;
 }
 export interface BrokerConfig {
     enabled: boolean;
@@ -76,7 +78,12 @@ export interface CustomTimePoint {
 export interface CustomParams {
     series: CustomTimePoint[];
 }
-export type PatternParams = SteadyParams | GradualParams | SpikeParams | WaveParams | StepParams | CustomParams;
+export interface GrafanaParams {
+    series: CustomTimePoint[];
+    raw_csv: string;
+    value_unit: 'rps' | 'rpm' | 'rph';
+}
+export type PatternParams = SteadyParams | GradualParams | SpikeParams | WaveParams | StepParams | CustomParams | GrafanaParams;
 export interface TrafficConfig {
     pattern: TrafficPatternType;
     params: PatternParams;

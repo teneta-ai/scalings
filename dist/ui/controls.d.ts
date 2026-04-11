@@ -6,6 +6,7 @@ export declare class UIControls {
     private previewRenderer;
     private onChangeCallbacks;
     private currentPattern;
+    private pendingCsvText;
     constructor(trafficService: TrafficPatternService);
     init(): void;
     onChange(cb: ChangeCallback): void;
@@ -25,6 +26,7 @@ export declare class UIControls {
     private getStepEntries;
     private setStepEntries;
     private getCustomSeries;
+    private getGrafanaParams;
     private bindSliders;
     private bindPatternSelector;
     private bindAdvancedToggle;
@@ -36,6 +38,14 @@ export declare class UIControls {
     private bindFailureEventControls;
     private bindBrokerToggle;
     private bindRetryDelayTooltip;
+    private getCsvValueUnit;
+    private setCsvValueUnit;
+    private bindCsvImport;
+    private applyCsvImport;
+    private reapplyCsvWithUnit;
+    private applyGrafanaParse;
+    private selectPattern;
+    private setCsvStatus;
     private updateBrokerSizeUI;
     private getFailureEvents;
     private setFailureEvents;
