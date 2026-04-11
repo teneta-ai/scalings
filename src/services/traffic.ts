@@ -196,7 +196,7 @@ export function parseGrafanaCSV(csv: string, valueUnit: 'rps' | 'rpm' | 'rph' = 
 
     const tsRaw = cols[timeIdx].trim();
     const valRaw = cols[valueIdx].trim();
-    const val = parseFloat(valRaw);
+    const val = parseHumanValue(valRaw);
     if (isNaN(val)) continue;
 
     const ts = parseTimestamp(tsRaw);
@@ -262,14 +262,27 @@ export function detectCsvValueUnit(csv: string): CsvUnitGuess {
     return { unit: 'rps', reason: `column "${headerCols[valueIdx].trim()}" suggests requests/sec` };
   }
 
-  // --- Heuristic 2: Value magnitude ---
-  // Sample up to 100 values to compute the median
+  // --- Heuristic 2: Unit suffix in value strings (e.g. "40.0K ops/m") ---
+  // Check a few data rows for a consistent unit suffix
+  const suffixSampleLimit = Math.min(lines.length, 6);
+  for (let i = 1; i < suffixSampleLimit; i++) {
+    const cols = parseCsvRow(lines[i], sep);
+    if (cols.length <= valueIdx) continue;
+    const suffixUnit = detectUnitFromValueSuffix(cols[valueIdx]);
+    if (suffixUnit) {
+      const unitLabels = { rps: 'requests/sec', rpm: 'requests/min', rph: 'requests/hour' };
+      return { unit: suffixUnit, reason: `value suffix suggests ${unitLabels[suffixUnit]}` };
+    }
+  }
+
+  // --- Heuristic 3: Value magnitude ---
+  // Sample up to 100 values to compute the median (using parseHumanValue for SI suffixes)
   const values: number[] = [];
   const sampleLimit = Math.min(lines.length, 101);
   for (let i = 1; i < sampleLimit; i++) {
     const cols = parseCsvRow(lines[i], sep);
     if (cols.length <= valueIdx) continue;
-    const val = parseFloat(cols[valueIdx].trim());
+    const val = parseHumanValue(cols[valueIdx].trim());
     if (!isNaN(val) && val > 0) values.push(val);
   }
 
@@ -288,6 +301,40 @@ export function detectCsvValueUnit(csv: string): CsvUnitGuess {
   }
 
   return { unit: 'rps', reason: 'values look like requests/sec' };
+}
+
+/**
+ * Parse a human-readable numeric value that may include SI suffixes and unit text.
+ * Examples: "40.0K ops/m" → 40000, "104K" → 104000, "119 ops/m" → 119,
+ *           "1.07K ops/m" → 1070, "2.5M" → 2500000
+ * Returns NaN if no number can be parsed.
+ */
+export function parseHumanValue(raw: string): number {
+  const trimmed = raw.trim();
+  // Match: optional sign, digits with optional decimal, optional SI suffix, optional trailing text
+  const m = trimmed.match(/^([+-]?\d+(?:\.\d+)?)\s*([KMBT])?/i);
+  if (!m) return NaN;
+  const num = parseFloat(m[1]);
+  if (isNaN(num)) return NaN;
+  const suffix = (m[2] || '').toUpperCase();
+  const multipliers: Record<string, number> = { K: 1e3, M: 1e6, B: 1e9, T: 1e12 };
+  return num * (multipliers[suffix] || 1);
+}
+
+/**
+ * Detect a rate unit from a value string's suffix text.
+ * E.g. "40.0K ops/m" → 'rpm', "500 req/s" → 'rps', "1.2K ops/h" → 'rph'.
+ * Returns null if no unit suffix is detected.
+ */
+export function detectUnitFromValueSuffix(raw: string): 'rps' | 'rpm' | 'rph' | null {
+  const trimmed = raw.trim();
+  // Strip leading number and optional SI suffix
+  const rest = trimmed.replace(/^[+-]?\d+(?:\.\d+)?\s*[KMBT]?\s*/i, '').toLowerCase();
+  if (!rest) return null;
+  if (/\/h(?:r|our)?$|per\s*h(?:r|our)?/.test(rest)) return 'rph';
+  if (/\/m(?:in)?$|per\s*m(?:in)?/.test(rest)) return 'rpm';
+  if (/\/s(?:ec)?$|per\s*s(?:ec)?/.test(rest)) return 'rps';
+  return null;
 }
 
 /** Parse a single CSV row respecting quoted fields. */

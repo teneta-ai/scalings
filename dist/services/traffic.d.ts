@@ -36,3 +36,16 @@ export interface CsvUnitGuess {
  * and let the user override if wrong.
  */
 export declare function detectCsvValueUnit(csv: string): CsvUnitGuess;
+/**
+ * Parse a human-readable numeric value that may include SI suffixes and unit text.
+ * Examples: "40.0K ops/m" → 40000, "104K" → 104000, "119 ops/m" → 119,
+ *           "1.07K ops/m" → 1070, "2.5M" → 2500000
+ * Returns NaN if no number can be parsed.
+ */
+export declare function parseHumanValue(raw: string): number;
+/**
+ * Detect a rate unit from a value string's suffix text.
+ * E.g. "40.0K ops/m" → 'rpm', "500 req/s" → 'rps', "1.2K ops/h" → 'rph'.
+ * Returns null if no unit suffix is detected.
+ */
+export declare function detectUnitFromValueSuffix(raw: string): 'rps' | 'rpm' | 'rph' | null;
