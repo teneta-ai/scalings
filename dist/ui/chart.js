@@ -493,6 +493,11 @@ export class TrafficPreviewRenderer {
     constructor() {
         this.chart = null;
     }
+    formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    }
     render(canvasId, data) {
         const canvas = document.getElementById(canvasId);
         if (!canvas)
@@ -503,13 +508,14 @@ export class TrafficPreviewRenderer {
         const ctx = canvas.getContext('2d');
         if (!ctx)
             return;
-        const labels = data.map((_, i) => i.toString());
+        const labels = data.map((_, i) => this.formatTime(i));
         this.chart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels,
                 datasets: [
                     {
+                        label: 'Traffic (RPS)',
                         data,
                         borderColor: COLORS.traffic,
                         backgroundColor: COLORS.trafficFill,
@@ -524,9 +530,29 @@ export class TrafficPreviewRenderer {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 300 },
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
-                    tooltip: { enabled: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(10, 14, 26, 0.95)',
+                        titleColor: '#00d4ff',
+                        bodyColor: '#e2e8f0',
+                        borderColor: 'rgba(0, 212, 255, 0.3)',
+                        borderWidth: 1,
+                        titleFont: { family: "'JetBrains Mono', monospace", size: 11 },
+                        bodyFont: { family: "'JetBrains Mono', monospace", size: 10 },
+                        padding: 8,
+                        callbacks: {
+                            title: (items) => {
+                                if (!items.length)
+                                    return '';
+                                return `Time: ${items[0].label}`;
+                            },
+                            label: (context) => {
+                                return ` Traffic: ${Math.round(context.parsed.y).toLocaleString()} RPS`;
+                            },
+                        },
+                    },
                 },
                 scales: {
                     x: { display: false },
