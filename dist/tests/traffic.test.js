@@ -447,6 +447,24 @@ describe('detectUnitFromValueSuffix', () => {
     it('detects ops/hr as rph', () => {
         assert.equal(detectUnitFromValueSuffix('500 ops/hr'), 'rph');
     });
+    it('detects standalone rps abbreviation', () => {
+        assert.equal(detectUnitFromValueSuffix('500 rps'), 'rps');
+    });
+    it('detects standalone qps abbreviation', () => {
+        assert.equal(detectUnitFromValueSuffix('1.2K qps'), 'rps');
+    });
+    it('detects standalone rpm abbreviation', () => {
+        assert.equal(detectUnitFromValueSuffix('40K rpm'), 'rpm');
+    });
+    it('detects iops as rps', () => {
+        assert.equal(detectUnitFromValueSuffix('500 iops'), 'rps');
+    });
+    it('detects cps/eps/wps as rps', () => {
+        assert.equal(detectUnitFromValueSuffix('100 cps'), 'rps');
+        assert.equal(detectUnitFromValueSuffix('100 eps'), 'rps');
+        assert.equal(detectUnitFromValueSuffix('100 wps'), 'rps');
+        // Note: "mps" (messages/sec) is not supported — "m" is ambiguous with SI mega prefix
+    });
     it('returns null for plain numbers', () => {
         assert.equal(detectUnitFromValueSuffix('42'), null);
         assert.equal(detectUnitFromValueSuffix('40.0K'), null);

@@ -292,12 +292,20 @@ export function detectUnitFromValueSuffix(raw) {
     const rest = trimmed.replace(/^[+-]?\d+(?:\.\d+)?\s*[KMBT]?\s*/i, '').toLowerCase();
     if (!rest)
         return null;
+    // Slash-based: ops/s, req/min, events/h, r/s, w/s, etc.
     if (/\/h(?:r|our)?$|per\s*h(?:r|our)?/.test(rest))
         return 'rph';
     if (/\/m(?:in)?$|per\s*m(?:in)?/.test(rest))
         return 'rpm';
     if (/\/s(?:ec)?$|per\s*s(?:ec)?/.test(rest))
         return 'rps';
+    // Standalone abbreviations: rps, qps, cps, eps, wps, mps, iops, rpm, rph
+    if (/(?:^|[\s/])(?:[rqcew]ps|iops)$/.test(rest))
+        return 'rps';
+    if (/(?:^|[\s/])(?:rpm|qpm)$/.test(rest))
+        return 'rpm';
+    if (/(?:^|[\s/])(?:rph|qph)$/.test(rest))
+        return 'rph';
     return null;
 }
 /** Parse a single CSV row respecting quoted fields. */
