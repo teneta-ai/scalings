@@ -1,4 +1,8 @@
 import { SimulationResult } from '../interfaces/types.js';
+/** Format seconds into M:SS display string */
+export declare function formatTime(seconds: number): string;
+/** Format a tooltip label based on dataset type */
+export declare function formatTooltipLabel(datasetLabel: string, value: number): string;
 export declare class ChartRenderer {
     private chart;
     private animationFrame;
@@ -30,11 +34,9 @@ export declare class ChartRenderer {
     }[]): void;
     stop(): void;
     destroy(): void;
-    private formatTime;
 }
 export declare class TrafficPreviewRenderer {
     private chart;
-    private formatTime;
     render(canvasId: string, data: number[]): void;
     destroy(): void;
 }

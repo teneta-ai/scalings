@@ -7,6 +7,23 @@ import { SimulationResult, TickSnapshot } from '../interfaces/types.js';
 // Chart.js is loaded globally from CDN
 declare const Chart: any;
 
+// --- Exported formatting helpers (testable without DOM/Chart.js) ---
+
+/** Format seconds into M:SS display string */
+export function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/** Format a tooltip label based on dataset type */
+export function formatTooltipLabel(datasetLabel: string, value: number): string {
+  if (datasetLabel.includes('Pods')) return ` ${datasetLabel}: ${value}`;
+  if (datasetLabel.includes('Wait'))
+    return ` ${datasetLabel}: ${value >= 1000 ? (value / 1000).toFixed(1) + 's' : Math.round(value) + 'ms'}`;
+  return ` ${datasetLabel}: ${Math.round(value).toLocaleString()}`;
+}
+
 interface ChartColors {
   traffic: string;
   trafficFill: string;
@@ -145,12 +162,7 @@ export class ChartRenderer {
           return `Time: ${items[0].label}`;
         },
         label: (context: any) => {
-          const label = context.dataset.label || '';
-          const value = context.parsed.y;
-          if (label.includes('Pods')) return ` ${label}: ${value}`;
-          if (label.includes('Wait'))
-            return ` ${label}: ${value >= 1000 ? (value / 1000).toFixed(1) + 's' : Math.round(value) + 'ms'}`;
-          return ` ${label}: ${Math.round(value).toLocaleString()}`;
+          return formatTooltipLabel(context.dataset.label || '', context.parsed.y);
         },
       },
     };
@@ -345,7 +357,7 @@ export class ChartRenderer {
     this.chart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: snapshots.map(s => this.formatTime(s.time)),
+        labels: snapshots.map(s => formatTime(s.time)),
         datasets,
       },
       options: {
@@ -428,7 +440,7 @@ export class ChartRenderer {
     this.chart = new Chart(ctx, {
       type: 'line',
       data: {
-        labels: snapshots.map(s => this.formatTime(s.time)),
+        labels: snapshots.map(s => formatTime(s.time)),
         datasets,
       },
       options: {
@@ -469,7 +481,7 @@ export class ChartRenderer {
     const longest = runs.reduce((a, b) =>
       a.result.snapshots.length >= b.result.snapshots.length ? a : b
     );
-    const labels = longest.result.snapshots.map(s => this.formatTime(s.time));
+    const labels = longest.result.snapshots.map(s => formatTime(s.time));
 
     // Traffic from the latest run (shared x-axis)
     const latestRun = runs[runs.length - 1];
@@ -549,23 +561,12 @@ export class ChartRenderer {
     }
   }
 
-  private formatTime(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
 }
 
 // --- Traffic Preview (small inline chart) ---
 
 export class TrafficPreviewRenderer {
   private chart: any = null;
-
-  private formatTime(seconds: number): string {
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
 
   render(canvasId: string, data: number[]): void {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -578,7 +579,7 @@ export class TrafficPreviewRenderer {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const labels = data.map((_, i) => this.formatTime(i));
+    const labels = data.map((_, i) => formatTime(i));
 
     this.chart = new Chart(ctx, {
       type: 'line',
@@ -619,7 +620,7 @@ export class TrafficPreviewRenderer {
                 return `Time: ${items[0].label}`;
               },
               label: (context: any) => {
-                return ` Traffic: ${Math.round(context.parsed.y).toLocaleString()} RPS`;
+                return formatTooltipLabel(context.dataset.label || 'Traffic (RPS)', context.parsed.y);
               },
             },
           },

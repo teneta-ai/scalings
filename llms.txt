@@ -101,6 +101,17 @@ The pod fleet with scaling, saturation degradation, and chaos engineering.
 DevOps engineers, SREs, platform teams, anyone tuning autoscaling policies.
 Useful for capacity planning, incident post-mortems, and scaling policy validation.
 
+## Chart & visualization
+Both the main simulation chart and the traffic preview chart show interactive
+tooltips on hover:
+- **Time** displayed as M:SS in the tooltip title
+- **Values** formatted per dataset type: comma-separated RPS for traffic/capacity/dropped,
+  integer count for pods, ms/s for wait times
+- Traffic preview x-axis shows time (M:SS), y-axis labeled "RPS"
+
+Chart datasets use descriptive labels (`Traffic (RPS)`, `Capacity (RPS)`,
+`Running Pods`, `Queue Depth`, etc.) for machine-readability.
+
 ## Export capabilities
 1. Source Config Export: Save/share simulation setup as YAML
 2. Target Config Export: Generate deployable manifests (K8s HPA YAML, AWS CloudFormation, GCP Terraform)

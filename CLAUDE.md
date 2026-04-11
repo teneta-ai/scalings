@@ -56,7 +56,7 @@ npm run build      # compile TypeScript
 npm test           # build + run all tests (node:test)
 ```
 
-Tests must pass before committing. Currently 116 tests across simulation, config, export, and traffic services.
+Tests must pass before committing. Currently 163 tests across simulation, config, export, traffic, and chart formatting.
 
 ## Architecture
 
@@ -88,6 +88,8 @@ src/
 - Shared building blocks: `buildScales()`, `buildPlugins()`, `buildDatasets()`
 - Dataset access uses label-based lookup (`getDatasetByLabel()`), not array indices
 - Conditionally include datasets (e.g., queue depth only when queue data exists)
+- Exported helpers `formatTime()` and `formatTooltipLabel()` handle display formatting and are tested independently of Chart.js/DOM
+- Both simulation chart and traffic preview show hover tooltips with time (M:SS) and formatted values
 
 ### UI Controls
 - `getConfig()` / `setConfig()` symmetry — every field readable and writable
