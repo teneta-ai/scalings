@@ -2,7 +2,7 @@
 // scalings.xyz — UI Controls (Form State, Input Bindings)
 // ============================================================================
 import { DEFAULT_CONFIG, PRESET_SCENARIOS, } from '../interfaces/types.js';
-import { parseGrafanaCSV } from '../services/traffic.js';
+import { parseGrafanaCSV, detectCsvValueUnit } from '../services/traffic.js';
 import { TrafficPreviewRenderer } from './chart.js';
 export class UIControls {
     constructor(trafficService) {
@@ -496,6 +496,11 @@ export class UIControls {
             return val;
         return 'rps';
     }
+    setCsvValueUnit(unit) {
+        const select = document.getElementById('csv-value-unit');
+        if (select)
+            select.value = unit;
+    }
     bindCsvImport() {
         const importBtn = document.getElementById('btn-import-csv');
         const fileInput = document.getElementById('csv-file-input');
@@ -524,11 +529,12 @@ export class UIControls {
                     // If it starts with a header-like row (not [ or {), try CSV parse
                     if (content && !content.startsWith('[') && !content.startsWith('{')) {
                         try {
-                            const unit = this.getCsvValueUnit();
-                            const series = parseGrafanaCSV(content, unit);
+                            const guess = detectCsvValueUnit(content);
+                            this.setCsvValueUnit(guess.unit);
+                            const series = parseGrafanaCSV(content, guess.unit);
                             textarea.value = JSON.stringify(series, null, 2);
-                            const unitLabel = unit === 'rps' ? '' : ` (converted from ${unit.toUpperCase()})`;
-                            this.setCsvStatus(`Parsed ${series.length} points from CSV${unitLabel}`, false);
+                            const unitLabel = guess.unit === 'rps' ? '' : ` as ${guess.unit.toUpperCase()}`;
+                            this.setCsvStatus(`Parsed ${series.length} points${unitLabel} — ${guess.reason}. Change unit above if incorrect.`, false);
                             this.selectPattern('custom');
                             this.notifyChange();
                             this.updatePreview();
@@ -545,8 +551,10 @@ export class UIControls {
         const textarea = document.getElementById('traffic-custom-series');
         if (!textarea)
             return;
-        const unit = this.getCsvValueUnit();
-        const series = parseGrafanaCSV(csvText, unit);
+        // Auto-detect unit from the data, then let the user override via dropdown
+        const guess = detectCsvValueUnit(csvText);
+        this.setCsvValueUnit(guess.unit);
+        const series = parseGrafanaCSV(csvText, guess.unit);
         textarea.value = JSON.stringify(series, null, 2);
         // Auto-adjust simulation duration to match the series
         const lastT = series[series.length - 1].t;
@@ -556,8 +564,8 @@ export class UIControls {
                 durationInput.value = String(lastT);
         }
         this.selectPattern('custom');
-        const unitLabel = unit === 'rps' ? '' : ` (converted from ${unit.toUpperCase()})`;
-        this.setCsvStatus(`Imported ${series.length} data points${unitLabel}`, false);
+        const unitLabel = guess.unit === 'rps' ? '' : ` as ${guess.unit.toUpperCase()}`;
+        this.setCsvStatus(`Imported ${series.length} points${unitLabel} — ${guess.reason}. Change unit above if incorrect.`, false);
         this.notifyChange();
         this.updatePreview();
     }

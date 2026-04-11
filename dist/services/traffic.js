@@ -178,6 +178,68 @@ export function parseGrafanaCSV(csv, valueUnit = 'rps') {
         rps: Math.round(r.rps * 100) / 100,
     }));
 }
+/**
+ * Guess the value unit of a Grafana CSV based on the column name and value magnitudes.
+ * Returns a guess with a human-readable reason. The caller should display the reason
+ * and let the user override if wrong.
+ */
+export function detectCsvValueUnit(csv) {
+    const lines = csv.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length < 2)
+        return { unit: 'rps', reason: 'too few rows to guess' };
+    const header = lines[0];
+    const sep = header.includes(';') ? ';' : header.includes('\t') ? '\t' : ',';
+    const headerCols = parseCsvRow(header, sep);
+    const colNames = headerCols.map(c => c.toLowerCase().trim());
+    const timeIdx = colNames.findIndex(c => c === 'time' || c === 'timestamp');
+    if (timeIdx === -1)
+        return { unit: 'rps', reason: 'no Time column found' };
+    let valueIdx = colNames.findIndex(c => c === 'value' || c === 'values');
+    if (valueIdx === -1) {
+        valueIdx = colNames.findIndex((c, i) => i !== timeIdx && c !== 'series' && c !== 'name' && c !== 'metric');
+    }
+    if (valueIdx === -1)
+        return { unit: 'rps', reason: 'no value column found' };
+    // --- Heuristic 1: Column name keywords ---
+    const colName = colNames[valueIdx];
+    const rphPatterns = /(?:^|[_.\s/])rph(?:$|[_.\s])|per[_.\s]?hour|\/h(?:our)?(?:$|[_.\s])/;
+    const rpmPatterns = /(?:^|[_.\s/])rpm(?:$|[_.\s])|per[_.\s]?min|\/min/;
+    const rpsPatterns = /(?:^|[_.\s/])rps(?:$|[_.\s])|per[_.\s]?sec|\/s(?:ec)?(?:$|[_.\s])/;
+    if (rphPatterns.test(colName)) {
+        return { unit: 'rph', reason: `column "${headerCols[valueIdx].trim()}" suggests requests/hour` };
+    }
+    if (rpmPatterns.test(colName)) {
+        return { unit: 'rpm', reason: `column "${headerCols[valueIdx].trim()}" suggests requests/min` };
+    }
+    if (rpsPatterns.test(colName)) {
+        return { unit: 'rps', reason: `column "${headerCols[valueIdx].trim()}" suggests requests/sec` };
+    }
+    // --- Heuristic 2: Value magnitude ---
+    // Sample up to 100 values to compute the median
+    const values = [];
+    const sampleLimit = Math.min(lines.length, 101);
+    for (let i = 1; i < sampleLimit; i++) {
+        const cols = parseCsvRow(lines[i], sep);
+        if (cols.length <= valueIdx)
+            continue;
+        const val = parseFloat(cols[valueIdx].trim());
+        if (!isNaN(val) && val > 0)
+            values.push(val);
+    }
+    if (values.length === 0)
+        return { unit: 'rps', reason: 'no numeric values to analyze' };
+    values.sort((a, b) => a - b);
+    const median = values[Math.floor(values.length / 2)];
+    // Conservative thresholds: only guess non-RPS when values are clearly too large
+    // A typical service might do 1–10,000 RPS; RPM values would be 60–600,000
+    if (median > 100000) {
+        return { unit: 'rph', reason: `median value ${Math.round(median).toLocaleString()} suggests requests/hour` };
+    }
+    if (median > 5000) {
+        return { unit: 'rpm', reason: `median value ${Math.round(median).toLocaleString()} suggests requests/min` };
+    }
+    return { unit: 'rps', reason: 'values look like requests/sec' };
+}
 /** Parse a single CSV row respecting quoted fields. */
 function parseCsvRow(row, sep) {
     const cols = [];

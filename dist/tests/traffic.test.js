@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { LocalTrafficPatternService, parseGrafanaCSV } from '../services/traffic.js';
+import { LocalTrafficPatternService, parseGrafanaCSV, detectCsvValueUnit } from '../services/traffic.js';
 const svc = new LocalTrafficPatternService();
 // ---------------------------------------------------------------------------
 // Steady
@@ -334,6 +334,59 @@ describe('parseGrafanaCSV — edge cases', () => {
         assert.equal(result.length, 2);
         assert.equal(result[0].t, 0);
         assert.equal(result[1].t, 60);
+    });
+});
+// ---------------------------------------------------------------------------
+// Auto-detect CSV value unit
+// ---------------------------------------------------------------------------
+describe('detectCsvValueUnit — column name detection', () => {
+    it('detects RPM from column name containing "rpm"', () => {
+        const csv = 'Time,http_requests_rpm\n1000000000,6000\n1000000060,3000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+        assert.ok(guess.reason.includes('requests/min'));
+    });
+    it('detects RPM from column name containing "per_minute"', () => {
+        const csv = 'Time,requests_per_minute\n1000000000,6000\n1000000060,3000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+    });
+    it('detects RPH from column name containing "/hour"', () => {
+        const csv = 'Time,requests/hour\n1000000000,360000\n1000000060,180000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rph');
+        assert.ok(guess.reason.includes('requests/hour'));
+    });
+    it('detects RPS from column name containing "rps"', () => {
+        const csv = 'Time,http_rps\n1000000000,100\n1000000060,200';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps');
+        assert.ok(guess.reason.includes('requests/sec'));
+    });
+});
+describe('detectCsvValueUnit — magnitude detection', () => {
+    it('guesses RPM when median value > 5000', () => {
+        const csv = 'Time,Value\n1000000000,12000\n1000000060,8000\n1000000120,15000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+        assert.ok(guess.reason.includes('median'));
+    });
+    it('guesses RPH when median value > 100000', () => {
+        const csv = 'Time,Value\n1000000000,360000\n1000000060,200000\n1000000120,500000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rph');
+        assert.ok(guess.reason.includes('median'));
+    });
+    it('guesses RPS when median value is small', () => {
+        const csv = 'Time,Value\n1000000000,100\n1000000060,200\n1000000120,150';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps');
+    });
+    it('column name takes priority over magnitude', () => {
+        // Column says "rps" but values are huge — trust the column name
+        const csv = 'Time,high_throughput_rps\n1000000000,50000\n1000000060,60000';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps');
     });
 });
 //# sourceMappingURL=traffic.test.js.map

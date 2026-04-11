@@ -26,3 +26,13 @@ export declare class LocalTrafficPatternService implements TrafficPatternService
  *                  Non-RPS values are divided by 60 or 3600 to convert to RPS.
  */
 export declare function parseGrafanaCSV(csv: string, valueUnit?: 'rps' | 'rpm' | 'rph'): CustomTimePoint[];
+export interface CsvUnitGuess {
+    unit: 'rps' | 'rpm' | 'rph';
+    reason: string;
+}
+/**
+ * Guess the value unit of a Grafana CSV based on the column name and value magnitudes.
+ * Returns a guess with a human-readable reason. The caller should display the reason
+ * and let the user override if wrong.
+ */
+export declare function detectCsvValueUnit(csv: string): CsvUnitGuess;
