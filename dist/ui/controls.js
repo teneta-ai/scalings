@@ -366,6 +366,10 @@ export class UIControls {
             radio.addEventListener('change', (e) => {
                 const target = e.target;
                 this.currentPattern = target.value;
+                // Clear raw CSV when leaving grafana pattern — no longer needed
+                if (this.currentPattern !== 'grafana') {
+                    this.pendingCsvText = null;
+                }
                 this.showPatternParams(this.currentPattern);
                 this.notifyChange();
                 this.updatePreview();
