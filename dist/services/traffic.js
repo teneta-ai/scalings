@@ -113,4 +113,100 @@ export class LocalTrafficPatternService {
         }
     }
 }
+// ============================================================================
+// Grafana CSV Import — parse exported time-series into CustomTimePoint[]
+// ============================================================================
+/**
+ * Parse a Grafana-exported CSV into CustomTimePoint[].
+ * Supports common Grafana export formats:
+ *   - "Series;Time;Value" (panel CSV download, semicolon-separated)
+ *   - "Time,Value" or "Time,MetricName" (Inspect → Data → Download CSV)
+ *   - Tab-separated variants
+ * Timestamps: epoch milliseconds, epoch seconds, or ISO 8601 strings.
+ * Values are converted to relative seconds from the first data point.
+ * Negative RPS values are clamped to 0.
+ */
+export function parseGrafanaCSV(csv) {
+    const lines = csv.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length < 2)
+        throw new Error('CSV must have a header row and at least one data row');
+    // Detect separator: semicolon, comma, or tab
+    const header = lines[0];
+    const sep = header.includes(';') ? ';' : header.includes('\t') ? '\t' : ',';
+    const headerCols = parseCsvRow(header, sep);
+    // Identify column indices — case-insensitive, handle quoted headers
+    const colNames = headerCols.map(c => c.toLowerCase().trim());
+    const timeIdx = colNames.findIndex(c => c === 'time' || c === 'timestamp');
+    if (timeIdx === -1)
+        throw new Error('CSV must have a "Time" or "Timestamp" column');
+    // Value column: explicit "Value"/"value" column, or first numeric column that isn't Time
+    let valueIdx = colNames.findIndex(c => c === 'value' || c === 'values');
+    if (valueIdx === -1) {
+        // Pick the first column that isn't "time", "timestamp", or "series"/"name"
+        valueIdx = colNames.findIndex((c, i) => i !== timeIdx && c !== 'series' && c !== 'name' && c !== 'metric');
+    }
+    if (valueIdx === -1)
+        throw new Error('CSV must have at least one value column besides Time');
+    // Parse data rows
+    const raw = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cols = parseCsvRow(lines[i], sep);
+        if (cols.length <= Math.max(timeIdx, valueIdx))
+            continue;
+        const tsRaw = cols[timeIdx].trim();
+        const valRaw = cols[valueIdx].trim();
+        const val = parseFloat(valRaw);
+        if (isNaN(val))
+            continue;
+        const ts = parseTimestamp(tsRaw);
+        if (ts === null)
+            continue;
+        raw.push({ ts, rps: Math.max(0, val) });
+    }
+    if (raw.length === 0)
+        throw new Error('No valid data rows found in CSV');
+    // Sort by timestamp and convert to relative seconds from t=0
+    raw.sort((a, b) => a.ts - b.ts);
+    const t0 = raw[0].ts;
+    return raw.map(r => ({
+        t: Math.round(r.ts - t0),
+        rps: Math.round(r.rps * 100) / 100,
+    }));
+}
+/** Parse a single CSV row respecting quoted fields. */
+function parseCsvRow(row, sep) {
+    const cols = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch === '"') {
+            inQuotes = !inQuotes;
+        }
+        else if (ch === sep && !inQuotes) {
+            cols.push(current);
+            current = '';
+        }
+        else {
+            current += ch;
+        }
+    }
+    cols.push(current);
+    return cols;
+}
+/** Parse a timestamp string into epoch seconds. */
+function parseTimestamp(raw) {
+    // Try numeric (epoch ms or epoch seconds)
+    const num = Number(raw);
+    if (!isNaN(num) && isFinite(num)) {
+        // If > 1e12 it's milliseconds, else seconds
+        return num > 1e12 ? num / 1000 : num;
+    }
+    // Try ISO 8601 / date string
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+        return d.getTime() / 1000;
+    }
+    return null;
+}
 //# sourceMappingURL=traffic.js.map

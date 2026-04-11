@@ -757,6 +757,22 @@ button:active, .btn:active {
   display: block;
 }
 
+.csv-import-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.csv-import-status {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.csv-import-status.success { color: var(--lime); }
+.csv-import-status.error { color: var(--red); }
+
 /* --- Traffic Preview --- */
 .traffic-preview {
   background: var(--bg-input);

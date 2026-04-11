@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { LocalTrafficPatternService } from '../services/traffic.js';
+import { LocalTrafficPatternService, parseGrafanaCSV } from '../services/traffic.js';
 import {
   TrafficConfig,
   SteadyParams,
@@ -235,5 +235,124 @@ describe('TrafficPatternService — edge cases', () => {
     };
     const data = svc.generate(traffic, 60, 5);
     assert.equal(data.length, 12); // 60 / 5
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Grafana CSV import
+// ---------------------------------------------------------------------------
+describe('parseGrafanaCSV — semicolon-separated (panel export)', () => {
+  it('parses Series;Time;Value format with epoch ms timestamps', () => {
+    const csv = [
+      'Series;Time;Value',
+      '"cpu_usage";1706745600000;42.5',
+      '"cpu_usage";1706745660000;55.3',
+      '"cpu_usage";1706745720000;38.1',
+    ].join('\n');
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result.length, 3);
+    assert.equal(result[0].t, 0);
+    assert.equal(result[0].rps, 42.5);
+    assert.equal(result[1].t, 60);
+    assert.equal(result[1].rps, 55.3);
+    assert.equal(result[2].t, 120);
+    assert.equal(result[2].rps, 38.1);
+  });
+});
+
+describe('parseGrafanaCSV — comma-separated (Inspect > Data export)', () => {
+  it('parses Time,MetricName format with ISO timestamps', () => {
+    const csv = [
+      'Time,request_rate',
+      '2024-01-31T16:00:00.000Z,100',
+      '2024-01-31T16:01:00.000Z,200',
+      '2024-01-31T16:02:00.000Z,150',
+    ].join('\n');
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result.length, 3);
+    assert.equal(result[0].t, 0);
+    assert.equal(result[0].rps, 100);
+    assert.equal(result[1].t, 60);
+    assert.equal(result[1].rps, 200);
+    assert.equal(result[2].t, 120);
+    assert.equal(result[2].rps, 150);
+  });
+
+  it('parses Time,Value format with epoch seconds', () => {
+    const csv = [
+      'Time,Value',
+      '1706745600,500',
+      '1706745660,600',
+      '1706745720,550',
+    ].join('\n');
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result.length, 3);
+    assert.equal(result[0].t, 0);
+    assert.equal(result[1].t, 60);
+    assert.equal(result[2].t, 120);
+  });
+});
+
+describe('parseGrafanaCSV — tab-separated', () => {
+  it('parses tab-separated format', () => {
+    const csv = 'Time\tValue\n1706745600000\t42\n1706745660000\t55';
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result.length, 2);
+    assert.equal(result[0].t, 0);
+    assert.equal(result[1].t, 60);
+  });
+});
+
+describe('parseGrafanaCSV — edge cases', () => {
+  it('clamps negative values to 0', () => {
+    const csv = 'Time,Value\n1000000000,100\n1000000060,-50\n1000000120,200';
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result[1].rps, 0);
+  });
+
+  it('sorts by timestamp', () => {
+    const csv = 'Time,Value\n1000000120,300\n1000000000,100\n1000000060,200';
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result[0].t, 0);
+    assert.equal(result[0].rps, 100);
+    assert.equal(result[1].t, 60);
+    assert.equal(result[1].rps, 200);
+    assert.equal(result[2].t, 120);
+    assert.equal(result[2].rps, 300);
+  });
+
+  it('skips rows with non-numeric values', () => {
+    const csv = 'Time,Value\n1000000000,100\n1000000060,N/A\n1000000120,200';
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result.length, 2);
+  });
+
+  it('throws on missing Time column', () => {
+    const csv = 'Series,Value\nfoo,100\nbar,200';
+    assert.throws(() => parseGrafanaCSV(csv), /Time/);
+  });
+
+  it('throws on too few rows', () => {
+    const csv = 'Time,Value';
+    assert.throws(() => parseGrafanaCSV(csv), /header.*data/i);
+  });
+
+  it('throws on no valid data rows', () => {
+    const csv = 'Time,Value\nbadtime,notanumber';
+    assert.throws(() => parseGrafanaCSV(csv), /No valid/);
+  });
+
+  it('handles Windows-style line endings', () => {
+    const csv = 'Time,Value\r\n1000000000,100\r\n1000000060,200\r\n';
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result.length, 2);
+  });
+
+  it('handles quoted headers', () => {
+    const csv = '"Time";"Value"\n1000000000;100\n1000000060;200';
+    const result = parseGrafanaCSV(csv);
+    assert.equal(result.length, 2);
+    assert.equal(result[0].t, 0);
+    assert.equal(result[1].t, 60);
   });
 });

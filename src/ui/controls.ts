@@ -23,6 +23,7 @@ import {
   PRESET_SCENARIOS,
 } from '../interfaces/types.js';
 import { TrafficPatternService } from '../interfaces/types.js';
+import { parseGrafanaCSV } from '../services/traffic.js';
 import { TrafficPreviewRenderer } from './chart.js';
 
 type ChangeCallback = () => void;
@@ -49,6 +50,7 @@ export class UIControls {
     this.bindFailureEventControls();
     this.bindBrokerToggle();
     this.bindRetryDelayTooltip();
+    this.bindCsvImport();
     this.showPatternParams(this.currentPattern);
     this.updatePreview();
   }
@@ -340,11 +342,18 @@ export class UIControls {
     const textarea = document.getElementById('traffic-custom-series') as HTMLTextAreaElement;
     if (!textarea) return [{ t: 0, rps: 100 }];
 
+    const content = textarea.value.trim();
+    // Try JSON first
     try {
-      const parsed = JSON.parse(textarea.value);
+      const parsed = JSON.parse(content);
       if (Array.isArray(parsed)) return parsed;
     } catch {
-      // Try line-by-line format
+      // Not JSON — try CSV parsing
+    }
+    try {
+      return parseGrafanaCSV(content);
+    } catch {
+      // Not valid CSV either
     }
     return [{ t: 0, rps: 100 }, { t: 300, rps: 500 }, { t: 600, rps: 100 }];
   }
@@ -553,6 +562,86 @@ export class UIControls {
     delayInput.addEventListener('input', update);
     tickInput.addEventListener('input', update);
     update();
+  }
+
+  private bindCsvImport(): void {
+    const importBtn = document.getElementById('btn-import-csv');
+    const fileInput = document.getElementById('csv-file-input') as HTMLInputElement;
+    const textarea = document.getElementById('traffic-custom-series') as HTMLTextAreaElement;
+
+    if (importBtn && fileInput) {
+      importBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async () => {
+        if (!fileInput.files?.length) return;
+        try {
+          const text = await fileInput.files[0].text();
+          this.applyCsvImport(text);
+        } catch (err) {
+          this.setCsvStatus(err instanceof Error ? err.message : 'Import failed', true);
+        }
+        fileInput.value = '';
+      });
+    }
+
+    // Auto-detect CSV when pasting into the textarea
+    if (textarea) {
+      textarea.addEventListener('paste', (e) => {
+        // Let the paste complete, then check the content
+        setTimeout(() => {
+          const content = textarea.value.trim();
+          // If it starts with a header-like row (not [ or {), try CSV parse
+          if (content && !content.startsWith('[') && !content.startsWith('{')) {
+            try {
+              const series = parseGrafanaCSV(content);
+              textarea.value = JSON.stringify(series, null, 2);
+              this.setCsvStatus(`Parsed ${series.length} points from CSV`, false);
+              this.selectPattern('custom');
+              this.notifyChange();
+              this.updatePreview();
+            } catch {
+              // Not valid CSV either — leave as-is for the user to fix
+            }
+          }
+        }, 0);
+      });
+    }
+  }
+
+  private applyCsvImport(csvText: string): void {
+    const textarea = document.getElementById('traffic-custom-series') as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const series = parseGrafanaCSV(csvText);
+    textarea.value = JSON.stringify(series, null, 2);
+
+    // Auto-adjust simulation duration to match the series
+    const lastT = series[series.length - 1].t;
+    if (lastT > 0) {
+      const durationInput = document.getElementById('sim-duration') as HTMLInputElement;
+      if (durationInput) durationInput.value = String(lastT);
+    }
+
+    this.selectPattern('custom');
+    this.setCsvStatus(`Imported ${series.length} data points`, false);
+    this.notifyChange();
+    this.updatePreview();
+  }
+
+  private selectPattern(pattern: TrafficPatternType): void {
+    const radio = document.getElementById(`pattern-${pattern}`) as HTMLInputElement;
+    if (radio) {
+      radio.checked = true;
+      this.currentPattern = pattern;
+      this.showPatternParams(pattern);
+    }
+  }
+
+  private setCsvStatus(msg: string, isError: boolean): void {
+    const el = document.getElementById('csv-import-status');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `csv-import-status ${isError ? 'error' : 'success'}`;
+    setTimeout(() => { el.textContent = ''; el.className = 'csv-import-status'; }, 5000);
   }
 
   private updateBrokerSizeUI(input: HTMLInputElement): void {
