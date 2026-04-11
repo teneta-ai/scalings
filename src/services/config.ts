@@ -14,6 +14,7 @@ import {
   ServiceConfig,
   FailureEvent,
   RetryStrategy,
+  GrafanaParams,
   SimulationParams,
   TrafficConfig,
   SteadyParams,
@@ -182,7 +183,7 @@ export class LocalConfigService implements ConfigService {
   }
 
   private validateTraffic(obj: Record<string, unknown>): TrafficConfig {
-    const validPatterns: TrafficPatternType[] = ['steady', 'gradual', 'spike', 'wave', 'step', 'custom'];
+    const validPatterns: TrafficPatternType[] = ['steady', 'gradual', 'spike', 'wave', 'step', 'custom', 'grafana'];
     const pattern = validPatterns.includes(obj.pattern as TrafficPatternType)
       ? obj.pattern as TrafficPatternType
       : DEFAULT_CONFIG.producer.traffic.pattern;
@@ -305,6 +306,15 @@ export class LocalConfigService implements ConfigService {
       }
       case 'custom': {
         const p = params as CustomParams;
+        lines.push('      series:');
+        for (const point of p.series) {
+          lines.push(`        - { t: ${point.t}, rps: ${point.rps} }`);
+        }
+        break;
+      }
+      case 'grafana': {
+        const p = params as GrafanaParams;
+        lines.push(`      value_unit: ${p.value_unit || 'rps'}`);
         lines.push('      series:');
         for (const point of p.series) {
           lines.push(`        - { t: ${point.t}, rps: ${point.rps} }`);

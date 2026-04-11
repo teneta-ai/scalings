@@ -30,6 +30,8 @@ export class LocalTrafficPatternService {
                 return this.step(traffic.params, t);
             case 'custom':
                 return this.custom(traffic.params, t);
+            case 'grafana':
+                return this.custom(traffic.params, t);
             default:
                 return 0;
         }
@@ -102,6 +104,13 @@ export class LocalTrafficPatternService {
                 return p.steps.reduce((sum, s) => sum + s.duration, 0);
             }
             case 'custom': {
+                const p = traffic.params;
+                if (p.series && p.series.length > 0) {
+                    return p.series[p.series.length - 1].t;
+                }
+                return 600;
+            }
+            case 'grafana': {
                 const p = traffic.params;
                 if (p.series && p.series.length > 0) {
                     return p.series[p.series.length - 1].t;

@@ -149,7 +149,7 @@ export class LocalConfigService {
         };
     }
     validateTraffic(obj) {
-        const validPatterns = ['steady', 'gradual', 'spike', 'wave', 'step', 'custom'];
+        const validPatterns = ['steady', 'gradual', 'spike', 'wave', 'step', 'custom', 'grafana'];
         const pattern = validPatterns.includes(obj.pattern)
             ? obj.pattern
             : DEFAULT_CONFIG.producer.traffic.pattern;
@@ -265,6 +265,15 @@ export class LocalConfigService {
             }
             case 'custom': {
                 const p = params;
+                lines.push('      series:');
+                for (const point of p.series) {
+                    lines.push(`        - { t: ${point.t}, rps: ${point.rps} }`);
+                }
+                break;
+            }
+            case 'grafana': {
+                const p = params;
+                lines.push(`      value_unit: ${p.value_unit || 'rps'}`);
                 lines.push('      series:');
                 for (const point of p.series) {
                     lines.push(`        - { t: ${point.t}, rps: ${point.rps} }`);

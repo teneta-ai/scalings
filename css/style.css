@@ -761,8 +761,31 @@ button:active, .btn:active {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 0.4rem;
+  margin-bottom: 0.4rem;
   flex-wrap: wrap;
+}
+
+.csv-import-or {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.grafana-csv-textarea {
+  width: 100%;
+  min-height: 80px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.grafana-csv-textarea::placeholder {
+  color: var(--text-muted);
+  font-size: 0.7rem;
 }
 
 .csv-import-row select {

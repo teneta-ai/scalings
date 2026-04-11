@@ -8,7 +8,7 @@ export type Platform = 'kubernetes-hpa' | 'aws-asg' | 'gcp-mig' | 'custom';
 
 export type TargetFormat = 'kubernetes-yaml' | 'cloudformation' | 'terraform' | 'gcloud-cli';
 
-export type TrafficPatternType = 'steady' | 'gradual' | 'spike' | 'wave' | 'step' | 'custom';
+export type TrafficPatternType = 'steady' | 'gradual' | 'spike' | 'wave' | 'step' | 'custom' | 'grafana';
 
 // --- Simulation Parameters ---
 
@@ -118,7 +118,13 @@ export interface CustomParams {
   series: CustomTimePoint[];
 }
 
-export type PatternParams = SteadyParams | GradualParams | SpikeParams | WaveParams | StepParams | CustomParams;
+export interface GrafanaParams {
+  series: CustomTimePoint[];   // parsed time-series (in RPS after conversion)
+  raw_csv: string;             // original CSV text for re-parsing with different unit
+  value_unit: 'rps' | 'rpm' | 'rph';  // unit used for conversion
+}
+
+export type PatternParams = SteadyParams | GradualParams | SpikeParams | WaveParams | StepParams | CustomParams | GrafanaParams;
 
 export interface TrafficConfig {
   pattern: TrafficPatternType;

@@ -26,6 +26,7 @@ export declare class UIControls {
     private getStepEntries;
     private setStepEntries;
     private getCustomSeries;
+    private getGrafanaParams;
     private bindSliders;
     private bindPatternSelector;
     private bindAdvancedToggle;
@@ -42,7 +43,7 @@ export declare class UIControls {
     private bindCsvImport;
     private applyCsvImport;
     private reapplyCsvWithUnit;
-    private convertCsvToSeries;
+    private applyGrafanaParse;
     private selectPattern;
     private setCsvStatus;
     private updateBrokerSizeUI;

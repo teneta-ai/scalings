@@ -205,6 +205,9 @@ export class UIControls {
             case 'custom':
                 params = { series: this.getCustomSeries() };
                 break;
+            case 'grafana':
+                params = this.getGrafanaParams();
+                break;
             default:
                 params = DEFAULT_CONFIG.producer.traffic.params;
         }
@@ -251,6 +254,15 @@ export class UIControls {
                     textarea.value = JSON.stringify(p.series, null, 2);
                 break;
             }
+            case 'grafana': {
+                const p = traffic.params;
+                const csvTextarea = document.getElementById('grafana-csv-input');
+                if (csvTextarea && p.raw_csv)
+                    csvTextarea.value = p.raw_csv;
+                this.setCsvValueUnit(p.value_unit || 'rps');
+                this.pendingCsvText = p.raw_csv || null;
+                break;
+            }
         }
     }
     getStepEntries() {
@@ -284,23 +296,29 @@ export class UIControls {
         const textarea = document.getElementById('traffic-custom-series');
         if (!textarea)
             return [{ t: 0, rps: 100 }];
-        const content = textarea.value.trim();
-        // Try JSON first
         try {
-            const parsed = JSON.parse(content);
+            const parsed = JSON.parse(textarea.value.trim());
             if (Array.isArray(parsed))
                 return parsed;
         }
         catch {
-            // Not JSON — try CSV parsing
-        }
-        try {
-            return parseGrafanaCSV(content, this.getCsvValueUnit());
-        }
-        catch {
-            // Not valid CSV either
+            // Invalid JSON
         }
         return [{ t: 0, rps: 100 }, { t: 300, rps: 500 }, { t: 600, rps: 100 }];
+    }
+    getGrafanaParams() {
+        const csvText = this.pendingCsvText || '';
+        const unit = this.getCsvValueUnit();
+        let series = [];
+        if (csvText) {
+            try {
+                series = parseGrafanaCSV(csvText, unit);
+            }
+            catch {
+                // Invalid CSV — empty series
+            }
+        }
+        return { series, raw_csv: csvText, value_unit: unit };
     }
     // --- DOM bindings ---
     bindSliders() {
@@ -357,10 +375,6 @@ export class UIControls {
         const trafficInputs = document.querySelectorAll('[id^="traffic-"] input, [id^="traffic-"] textarea');
         trafficInputs.forEach(input => {
             input.addEventListener('input', () => {
-                // Manual edits to the custom series textarea invalidate pending CSV
-                if (input.id === 'traffic-custom-series') {
-                    this.pendingCsvText = null;
-                }
                 this.notifyChange();
                 this.updatePreview();
             });
@@ -509,7 +523,7 @@ export class UIControls {
     bindCsvImport() {
         const importBtn = document.getElementById('btn-import-csv');
         const fileInput = document.getElementById('csv-file-input');
-        const textarea = document.getElementById('traffic-custom-series');
+        const csvTextarea = document.getElementById('grafana-csv-input');
         const unitSelect = document.getElementById('csv-value-unit');
         if (importBtn && fileInput) {
             importBtn.addEventListener('click', () => fileInput.click());
@@ -518,6 +532,8 @@ export class UIControls {
                     return;
                 try {
                     const text = await fileInput.files[0].text();
+                    if (csvTextarea)
+                        csvTextarea.value = text;
                     this.applyCsvImport(text);
                 }
                 catch (err) {
@@ -534,48 +550,41 @@ export class UIControls {
                 }
             });
         }
-        // Auto-detect CSV when pasting into the textarea
-        if (textarea) {
-            textarea.addEventListener('paste', (e) => {
-                // Let the paste complete, then check the content
-                setTimeout(() => {
-                    const content = textarea.value.trim();
-                    // If it starts with a header-like row (not [ or {), try CSV parse
-                    if (content && !content.startsWith('[') && !content.startsWith('{')) {
-                        try {
-                            this.applyCsvImport(content);
-                        }
-                        catch {
-                            // Not valid CSV either — leave as-is for the user to fix
-                        }
-                    }
-                }, 0);
-            });
+        // Parse CSV when pasting or typing into the grafana textarea
+        if (csvTextarea) {
+            const handleCsvInput = () => {
+                const content = csvTextarea.value.trim();
+                if (!content) {
+                    this.pendingCsvText = null;
+                    return;
+                }
+                try {
+                    this.applyCsvImport(content);
+                }
+                catch {
+                    // Not valid CSV yet — user may still be typing
+                }
+            };
+            csvTextarea.addEventListener('paste', () => setTimeout(handleCsvInput, 0));
+            csvTextarea.addEventListener('change', handleCsvInput);
         }
     }
     applyCsvImport(csvText) {
-        // Store raw CSV so unit changes can re-parse instantly
         this.pendingCsvText = csvText;
-        // Auto-detect unit from the data
         const guess = detectCsvValueUnit(csvText);
         this.setCsvValueUnit(guess.unit);
-        const series = this.convertCsvToSeries(csvText, guess.unit);
-        this.selectPattern('custom');
+        const series = this.applyGrafanaParse(csvText, guess.unit);
         const unitLabel = guess.unit === 'rps' ? '' : ` as ${guess.unit.toUpperCase()}`;
-        this.setCsvStatus(`Imported ${series.length} points${unitLabel} — ${guess.reason}. Change unit if incorrect.`, false);
+        this.setCsvStatus(`${series.length} points${unitLabel} — ${guess.reason}. Change unit if incorrect.`, false);
     }
     reapplyCsvWithUnit(unit) {
         if (!this.pendingCsvText)
             return;
-        const series = this.convertCsvToSeries(this.pendingCsvText, unit);
-        const label = unit.toUpperCase();
-        this.setCsvStatus(`Re-converted ${series.length} points as ${label}.`, false);
+        const series = this.applyGrafanaParse(this.pendingCsvText, unit);
+        this.setCsvStatus(`Re-converted ${series.length} points as ${unit.toUpperCase()}.`, false);
     }
-    convertCsvToSeries(csvText, unit) {
-        const textarea = document.getElementById('traffic-custom-series');
+    applyGrafanaParse(csvText, unit) {
         const series = parseGrafanaCSV(csvText, unit);
-        if (textarea)
-            textarea.value = JSON.stringify(series, null, 2);
         // Auto-adjust simulation duration to match the series
         const lastT = series[series.length - 1].t;
         if (lastT > 0) {

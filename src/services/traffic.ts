@@ -12,6 +12,7 @@ import {
   StepParams,
   CustomParams,
   CustomTimePoint,
+  GrafanaParams,
 } from '../interfaces/types.js';
 
 export class LocalTrafficPatternService implements TrafficPatternService {
@@ -47,6 +48,8 @@ export class LocalTrafficPatternService implements TrafficPatternService {
         return this.step(traffic.params as StepParams, t);
       case 'custom':
         return this.custom(traffic.params as CustomParams, t);
+      case 'grafana':
+        return this.custom(traffic.params as GrafanaParams, t);
       default:
         return 0;
     }
@@ -127,6 +130,13 @@ export class LocalTrafficPatternService implements TrafficPatternService {
       }
       case 'custom': {
         const p = traffic.params as CustomParams;
+        if (p.series && p.series.length > 0) {
+          return p.series[p.series.length - 1].t;
+        }
+        return 600;
+      }
+      case 'grafana': {
+        const p = traffic.params as GrafanaParams;
         if (p.series && p.series.length > 0) {
           return p.series[p.series.length - 1].t;
         }
