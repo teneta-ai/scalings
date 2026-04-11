@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { LocalTrafficPatternService, parseGrafanaCSV, detectCsvValueUnit } from '../services/traffic.js';
+import { LocalTrafficPatternService, parseGrafanaCSV, detectCsvValueUnit, parseHumanValue, detectUnitFromValueSuffix } from '../services/traffic.js';
 const svc = new LocalTrafficPatternService();
 // ---------------------------------------------------------------------------
 // Steady
@@ -387,6 +387,170 @@ describe('detectCsvValueUnit — magnitude detection', () => {
         const csv = 'Time,high_throughput_rps\n1000000000,50000\n1000000060,60000';
         const guess = detectCsvValueUnit(csv);
         assert.equal(guess.unit, 'rps');
+    });
+});
+// ---------------------------------------------------------------------------
+// parseHumanValue — SI suffix handling
+// ---------------------------------------------------------------------------
+describe('parseHumanValue — SI suffixes', () => {
+    it('parses plain numbers', () => {
+        assert.equal(parseHumanValue('42'), 42);
+        assert.equal(parseHumanValue('3.14'), 3.14);
+        assert.equal(parseHumanValue('  100  '), 100);
+    });
+    it('parses K suffix (thousands)', () => {
+        assert.equal(parseHumanValue('40.0K'), 40000);
+        assert.equal(parseHumanValue('1.07K'), 1070);
+        assert.equal(parseHumanValue('104K'), 104000);
+    });
+    it('parses M suffix (millions)', () => {
+        assert.equal(parseHumanValue('2.5M'), 2500000);
+        assert.equal(parseHumanValue('1M'), 1000000);
+    });
+    it('parses case-insensitively', () => {
+        assert.equal(parseHumanValue('40k'), 40000);
+        assert.equal(parseHumanValue('2.5m'), 2500000);
+    });
+    it('handles trailing text after suffix', () => {
+        assert.equal(parseHumanValue('40.0K ops/m'), 40000);
+        assert.equal(parseHumanValue('119 ops/m'), 119);
+        assert.equal(parseHumanValue('1.07K ops/m'), 1070);
+    });
+    it('returns NaN for non-numeric strings', () => {
+        assert.ok(isNaN(parseHumanValue('N/A')));
+        assert.ok(isNaN(parseHumanValue('abc')));
+        assert.ok(isNaN(parseHumanValue('')));
+    });
+    it('handles negative values', () => {
+        assert.equal(parseHumanValue('-5K'), -5000);
+    });
+});
+// ---------------------------------------------------------------------------
+// detectUnitFromValueSuffix
+// ---------------------------------------------------------------------------
+describe('detectUnitFromValueSuffix', () => {
+    it('detects ops/m as rpm', () => {
+        assert.equal(detectUnitFromValueSuffix('40.0K ops/m'), 'rpm');
+    });
+    it('detects ops/min as rpm', () => {
+        assert.equal(detectUnitFromValueSuffix('500 ops/min'), 'rpm');
+    });
+    it('detects ops/s as rps', () => {
+        assert.equal(detectUnitFromValueSuffix('200 ops/s'), 'rps');
+    });
+    it('detects ops/sec as rps', () => {
+        assert.equal(detectUnitFromValueSuffix('200 ops/sec'), 'rps');
+    });
+    it('detects ops/h as rph', () => {
+        assert.equal(detectUnitFromValueSuffix('1.2K ops/h'), 'rph');
+    });
+    it('detects ops/hr as rph', () => {
+        assert.equal(detectUnitFromValueSuffix('500 ops/hr'), 'rph');
+    });
+    it('detects standalone rps abbreviation', () => {
+        assert.equal(detectUnitFromValueSuffix('500 rps'), 'rps');
+    });
+    it('detects standalone qps abbreviation', () => {
+        assert.equal(detectUnitFromValueSuffix('1.2K qps'), 'rps');
+    });
+    it('detects standalone rpm abbreviation', () => {
+        assert.equal(detectUnitFromValueSuffix('40K rpm'), 'rpm');
+    });
+    it('detects iops as rps', () => {
+        assert.equal(detectUnitFromValueSuffix('500 iops'), 'rps');
+    });
+    it('detects cps/eps/wps as rps', () => {
+        assert.equal(detectUnitFromValueSuffix('100 cps'), 'rps');
+        assert.equal(detectUnitFromValueSuffix('100 eps'), 'rps');
+        assert.equal(detectUnitFromValueSuffix('100 wps'), 'rps');
+        // Note: "mps" (messages/sec) is not supported — "m" is ambiguous with SI mega prefix
+    });
+    it('returns null for plain numbers', () => {
+        assert.equal(detectUnitFromValueSuffix('42'), null);
+        assert.equal(detectUnitFromValueSuffix('40.0K'), null);
+    });
+});
+// ---------------------------------------------------------------------------
+// parseGrafanaCSV — SI suffix and unit suffix handling
+// ---------------------------------------------------------------------------
+describe('parseGrafanaCSV — Grafana human-readable values (K/M suffixes)', () => {
+    it('parses values with K suffix correctly', () => {
+        const csv = [
+            '"Time","Operations"',
+            '2026-04-07 13:27:00,40.0K ops/m',
+            '2026-04-07 13:27:15,40.5K ops/m',
+            '2026-04-07 13:27:30,41.0K ops/m',
+        ].join('\n');
+        const result = parseGrafanaCSV(csv, 'rpm');
+        assert.equal(result.length, 3);
+        assert.equal(result[0].t, 0);
+        assert.equal(result[0].rps, Math.round(40000 / 60 * 100) / 100); // 666.67
+        assert.equal(result[1].t, 15);
+        assert.equal(result[1].rps, Math.round(40500 / 60 * 100) / 100); // 675
+        assert.equal(result[2].t, 30);
+    });
+    it('handles mix of K-suffixed and plain values', () => {
+        const csv = [
+            '"Time","Operations"',
+            '2026-04-07 13:37:45,119 ops/m',
+            '2026-04-07 13:38:00,12.3K ops/m',
+        ].join('\n');
+        const result = parseGrafanaCSV(csv, 'rpm');
+        assert.equal(result.length, 2);
+        assert.equal(result[0].rps, Math.round(119 / 60 * 100) / 100); // 1.98
+        assert.equal(result[1].rps, Math.round(12300 / 60 * 100) / 100); // 205
+    });
+    it('handles real Grafana export with full data', () => {
+        const csv = [
+            '"Time","Operations"',
+            '2026-04-07 13:27:00,40.0K ops/m',
+            '2026-04-07 13:32:45,51.0K ops/m',
+            '2026-04-07 13:37:30,1.07K ops/m',
+            '2026-04-07 13:37:45,119 ops/m',
+            '2026-04-07 13:41:00,74.8K ops/m',
+            '2026-04-07 13:55:00,128K ops/m',
+            '2026-04-07 13:57:00,154K ops/m',
+        ].join('\n');
+        const result = parseGrafanaCSV(csv, 'rpm');
+        assert.equal(result.length, 7);
+        // First point at t=0
+        assert.equal(result[0].t, 0);
+        assert.equal(result[0].rps, Math.round(40000 / 60 * 100) / 100);
+        // 154K ops/m = 154000 / 60 ≈ 2566.67 RPS
+        assert.equal(result[6].rps, Math.round(154000 / 60 * 100) / 100);
+    });
+});
+// ---------------------------------------------------------------------------
+// detectCsvValueUnit — value suffix detection
+// ---------------------------------------------------------------------------
+describe('detectCsvValueUnit — value suffix detection', () => {
+    it('detects RPM from "ops/m" suffix in values', () => {
+        const csv = '"Time","Operations"\n2026-04-07 13:27:00,40.0K ops/m\n2026-04-07 13:27:15,40.5K ops/m';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+        assert.ok(guess.reason.includes('requests/min'));
+    });
+    it('detects RPS from "ops/s" suffix in values', () => {
+        const csv = 'Time,Value\n1000000000,500 ops/s\n1000000060,600 ops/s';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps');
+    });
+    it('detects RPH from "ops/h" suffix in values', () => {
+        const csv = 'Time,Value\n1000000000,360K ops/h\n1000000060,200K ops/h';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rph');
+    });
+    it('magnitude detection works with K-suffixed values', () => {
+        // Column name is generic "Value", no unit suffix in values, but values are 40K+
+        const csv = 'Time,Value\n1000000000,40.0K\n1000000060,50.0K\n1000000120,45.0K';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rpm');
+        assert.ok(guess.reason.includes('median'));
+    });
+    it('column name still takes priority over value suffix', () => {
+        const csv = 'Time,http_rps\n1000000000,500 ops/m\n1000000060,600 ops/m';
+        const guess = detectCsvValueUnit(csv);
+        assert.equal(guess.unit, 'rps'); // column name wins
     });
 });
 //# sourceMappingURL=traffic.test.js.map
