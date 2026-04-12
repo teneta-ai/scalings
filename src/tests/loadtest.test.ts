@@ -906,3 +906,36 @@ describe('Request config — template variables', () => {
     assert.ok(k6Output.includes('uuidv4'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Share URL inclusion & encoding
+// ---------------------------------------------------------------------------
+describe('Share URL in generated scripts', () => {
+  const config = makeConfig();
+
+  it('all frameworks include scalings.xyz share URL in output', () => {
+    const frameworks = ['k6', 'gatling', 'locust', 'jmeter', 'artillery'] as const;
+    for (const fw of frameworks) {
+      const exporter = svc.getExporter(fw);
+      const output = exporter.generate(config, 'https://example.com', 100, DEFAULT_LOAD_TEST_REQUEST);
+      assert.ok(
+        output.includes('scalings.xyz/#config='),
+        `${fw} script should include share URL`,
+      );
+    }
+  });
+
+  it('share URL uses Unicode-safe encoding compatible with config service', () => {
+    const exporter = svc.getExporter('k6');
+    const output = exporter.generate(config, 'https://example.com', 100, DEFAULT_LOAD_TEST_REQUEST);
+
+    // Extract the base64 portion from the share URL
+    const match = output.match(/scalings\.xyz\/#config=([A-Za-z0-9+/=]+)/);
+    assert.ok(match, 'should contain a base64-encoded config');
+
+    // Decode using the same method as LocalConfigService.fromURL
+    const json = decodeURIComponent(escape(atob(match![1])));
+    const decoded = JSON.parse(json);
+    assert.equal(decoded.simulation.duration, config.simulation.duration);
+  });
+});

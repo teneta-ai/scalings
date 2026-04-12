@@ -48,7 +48,8 @@ export class K6Exporter implements LoadTestExporter {
     const avgResponseSec = avgResponseTime / 1000;
     const duration = config.simulation.duration;
     const traffic = config.producer.traffic;
-    const shareUrl = `https://scalings.xyz/#config=${btoa(JSON.stringify(config))}`;
+    const configJson = JSON.stringify(config);
+    const shareUrl = `https://scalings.xyz/#config=${btoa(unescape(encodeURIComponent(configJson)))}`;
 
     const method = request.method;
     const hasBody = !!request.body && method !== 'GET' && method !== 'DELETE';

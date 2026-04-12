@@ -814,8 +814,20 @@ class App {
         const exporter = this.services.loadTestExport.getExporter(this.selectedFramework);
         if (container)
             container.classList.remove('hidden');
-        if (code)
+        if (code) {
+            // Map framework → highlight.js language class
+            const langMap = {
+                k6: 'javascript', gatling: 'java', locust: 'python', jmeter: 'xml', artillery: 'yaml',
+            };
+            const lang = langMap[this.selectedFramework] || 'plaintext';
+            code.className = `language-${lang}`;
             code.textContent = script;
+            // Apply syntax highlighting if highlight.js is loaded
+            const hljs = window.hljs;
+            if (hljs?.highlightElement) {
+                hljs.highlightElement(code);
+            }
+        }
         if (label)
             label.textContent = `${exporter.name} script`;
     }

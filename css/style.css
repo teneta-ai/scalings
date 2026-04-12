@@ -1273,6 +1273,12 @@ button:active, .btn:active {
   line-height: 1.5;
 }
 
+/* Syntax-highlighted code: override highlight.js background to match export panel */
+.export-output code.hljs {
+  background: transparent;
+  padding: 0;
+}
+
 /* --- Load Test Export Section --- */
 .loadtest-export-section {
   margin-top: 1.5rem;

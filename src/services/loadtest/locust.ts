@@ -73,7 +73,8 @@ export class LocustExporter implements LoadTestExporter {
     const avgResponseSec = avgResponseTime / 1000;
     const duration = config.simulation.duration;
     const traffic = config.producer.traffic;
-    const shareUrl = `https://scalings.xyz/#config=${btoa(JSON.stringify(config))}`;
+    const configJson = JSON.stringify(config);
+    const shareUrl = `https://scalings.xyz/#config=${btoa(unescape(encodeURIComponent(configJson)))}`;
     const needsShape = traffic.pattern !== 'steady';
 
     const method = request.method;

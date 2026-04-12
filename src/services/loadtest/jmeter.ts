@@ -26,7 +26,8 @@ export class JMeterExporter implements LoadTestExporter {
     const avgResponseSec = avgResponseTime / 1000;
     const duration = config.simulation.duration;
     const traffic = config.producer.traffic;
-    const shareUrl = `https://scalings.xyz/#config=${btoa(JSON.stringify(config))}`;
+    const configJson = JSON.stringify(config);
+    const shareUrl = `https://scalings.xyz/#config=${btoa(unescape(encodeURIComponent(configJson)))}`;
 
     let parsedUrl: { protocol: string; host: string; port: string; path: string };
     try {

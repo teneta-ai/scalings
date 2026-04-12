@@ -10,7 +10,8 @@ export class GatlingExporter {
     generate(config, targetUrl, avgResponseTime, request, results) {
         const duration = config.simulation.duration;
         const traffic = config.producer.traffic;
-        const shareUrl = `https://scalings.xyz/#config=${btoa(JSON.stringify(config))}`;
+        const configJson = JSON.stringify(config);
+        const shareUrl = `https://scalings.xyz/#config=${btoa(unescape(encodeURIComponent(configJson)))}`;
         const method = request.method.toLowerCase();
         const hasBody = (method === 'post' || method === 'put' || method === 'patch') && request.body.trim() !== '';
         const lines = [];

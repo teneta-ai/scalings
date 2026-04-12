@@ -11,7 +11,8 @@ export class JMeterExporter {
         const avgResponseSec = avgResponseTime / 1000;
         const duration = config.simulation.duration;
         const traffic = config.producer.traffic;
-        const shareUrl = `https://scalings.xyz/#config=${btoa(JSON.stringify(config))}`;
+        const configJson = JSON.stringify(config);
+        const shareUrl = `https://scalings.xyz/#config=${btoa(unescape(encodeURIComponent(configJson)))}`;
         let parsedUrl;
         try {
             const u = new URL(targetUrl);

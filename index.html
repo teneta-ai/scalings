@@ -23,7 +23,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/atom-one-dark.min.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" onerror="document.getElementById('chartjs-error').classList.remove('hidden')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -808,6 +810,15 @@ traffic:
         <h3>Export Types</h3>
         <p><strong>Source Config Export</strong> — Saves/shares the full simulation scenario (YAML). Use for version control and sharing with teammates.</p>
         <p><strong>Target Config Export</strong> — Generates a deployable manifest for your platform (K8s HPA YAML, AWS CloudFormation, GCP Terraform).</p>
+        <p><strong>Load Test Export</strong> — Generates a ready-to-run load test script that reproduces your simulated traffic pattern against a real endpoint. Supports five frameworks:</p>
+        <ul>
+          <li><strong>k6</strong> — Modern JavaScript-based load testing by Grafana. Uses <code>constant-arrival-rate</code> or <code>ramping-arrival-rate</code> scenarios.</li>
+          <li><strong>Gatling</strong> — JVM-based load testing. Generates a Java simulation class with injection profiles.</li>
+          <li><strong>Locust</strong> — Python-based load testing. Generates a <code>HttpUser</code> class with optional <code>LoadTestShape</code> for non-steady patterns.</li>
+          <li><strong>JMeter</strong> — Apache JMeter JMX format. Uses standard Thread Groups for steady traffic and the Ultimate Thread Group plugin for dynamic patterns (spike, wave, step, custom).</li>
+          <li><strong>Artillery</strong> — Node.js YAML-based load testing. Maps traffic patterns to Artillery phases.</li>
+        </ul>
+        <p>Generated scripts include the simulation share URL as a comment, so recipients can trace back to the original scalings.xyz scenario. Configure the target URL, HTTP method, headers, and request body before generating. Template variables (<code>$randInt</code>, <code>$randString</code>, <code>$uuid</code>, <code>$timestamp</code>, <code>$randFloat</code>, <code>$randomEmail</code>) are translated to each framework's native random-data idioms.</p>
       </div>
     </section>
 
