@@ -704,7 +704,7 @@
       </button>
       <div id="docs-content" class="collapsible-content collapsed docs-content">
         <h3>What is scalings.xyz?</h3>
-        <p>scalings.xyz is an interactive, fully client-side autoscaling simulator. It lets engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy can handle the load.</p>
+        <p>scalings.xyz is an interactive, fully client-side autoscaling simulator. It lets engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy can handle the load. Once you've found a config that works, export deployment manifests for your platform and load test scripts to validate against real infrastructure.</p>
 
         <h3>When to use it</h3>
         <ul>
@@ -714,6 +714,7 @@
           <li><strong>Post-incident analysis</strong> — Replay a traffic spike that caused an outage. Tweak the scaling config until the sim shows zero drops, then export the fix.</li>
           <li><strong>Capacity planning</strong> — Model upcoming events (product launches, seasonal traffic) to figure out min replicas, max replicas, and cost ahead of time.</li>
           <li><strong>Chaos engineering</strong> — Schedule pod failures at specific times to test how your scaling policy recovers from node outages or AZ failures during load.</li>
+          <li><strong>Load test generation</strong> — Export ready-to-run load test scripts (k6, Gatling, Locust, JMeter, Artillery) that reproduce your simulated traffic pattern against a real endpoint. Validate that your infrastructure handles the load before going live.</li>
         </ul>
 
         <h3>Supported Platforms</h3>
