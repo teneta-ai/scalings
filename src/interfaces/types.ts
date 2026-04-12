@@ -210,6 +210,66 @@ export interface SimulationSummary {
   estimated_total_cost: number;
 }
 
+// --- Load Test Export Types ---
+
+export type LoadTestFramework = 'k6' | 'gatling' | 'locust' | 'jmeter' | 'artillery';
+
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/**
+ * Template variables available in body and header values.
+ * Each exporter maps these to framework-native syntax.
+ *
+ *   $randInt        — random integer 0–10000
+ *   $randString     — random alphanumeric string (10 chars)
+ *   $uuid           — UUID v4
+ *   $timestamp      — current Unix timestamp (ms)
+ *   $randFloat      — random float 0.0–1.0
+ *   $randomEmail    — random email address
+ */
+export const LOAD_TEST_TEMPLATE_VARS = [
+  '$randInt',
+  '$randString',
+  '$uuid',
+  '$timestamp',
+  '$randFloat',
+  '$randomEmail',
+] as const;
+
+export type LoadTestTemplateVar = typeof LOAD_TEST_TEMPLATE_VARS[number];
+
+export interface LoadTestRequestConfig {
+  method: HttpMethod;
+  headers: Record<string, string>;   // header-name → value (may contain template vars)
+  body: string;                       // raw body string (may contain template vars)
+}
+
+export interface LoadTestValidationResult {
+  valid: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface LoadTestExporter {
+  /** Framework identifier */
+  readonly id: LoadTestFramework;
+  /** Human-readable framework name */
+  readonly name: string;
+  /** File extension for the exported script */
+  readonly extension: string;
+  /** Generate the load test script from simulation config */
+  generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, request: LoadTestRequestConfig, results?: SimulationResult): string;
+  /** Validate that the config can be exported to this framework */
+  validate(config: SimulationConfig): LoadTestValidationResult;
+}
+
+export interface LoadTestExportOptions {
+  framework: LoadTestFramework;
+  targetUrl: string;
+  avgResponseTimeMs: number;
+  request: LoadTestRequestConfig;
+}
+
 // --- Service Interfaces ---
 
 export interface SimulationService {
@@ -233,6 +293,19 @@ export interface TrafficPatternService {
   generate(pattern: TrafficConfig, duration: number, tickInterval: number): number[];
   preview(pattern: TrafficConfig, points?: number): number[];
 }
+
+export interface LoadTestExportService {
+  getExporter(framework: LoadTestFramework): LoadTestExporter;
+  getAvailableFrameworks(): { id: LoadTestFramework; name: string }[];
+  generate(config: SimulationConfig, options: LoadTestExportOptions, results?: SimulationResult): string;
+  validate(config: SimulationConfig, framework: LoadTestFramework): LoadTestValidationResult;
+}
+
+export const DEFAULT_LOAD_TEST_REQUEST: LoadTestRequestConfig = {
+  method: 'GET',
+  headers: {},
+  body: '',
+};
 
 // --- Preset Scenarios ---
 

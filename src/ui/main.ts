@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { createServices, ServiceContainer } from '../factory.js';
-import { SimulationConfig, SimulationResult, SimulationSummary, TickSnapshot } from '../interfaces/types.js';
+import { SimulationConfig, SimulationResult, SimulationSummary, TickSnapshot, LoadTestFramework, LoadTestRequestConfig, HttpMethod } from '../interfaces/types.js';
 import { UIControls } from './controls.js';
 import { ChartRenderer } from './chart.js';
 
@@ -24,6 +24,8 @@ class App {
   private isRecording: boolean = false;
   private recordedRuns: { name: string; result: SimulationResult }[] = [];
   private runCounter: number = 0;
+  private lastResult: SimulationResult | null = null;
+  private selectedFramework: LoadTestFramework = 'k6';
 
   constructor() {
     this.services = createServices();
@@ -125,6 +127,119 @@ class App {
     const copyExportBtn = document.getElementById('btn-copy-export');
     if (copyExportBtn) {
       copyExportBtn.addEventListener('click', () => this.copyExportOutput());
+    }
+
+    // Load test framework toggles
+    const frameworkBtns = document.querySelectorAll('.framework-btn');
+    for (const btn of frameworkBtns) {
+      btn.addEventListener('click', () => {
+        for (const b of frameworkBtns) b.classList.remove('active');
+        btn.classList.add('active');
+        this.selectedFramework = (btn as HTMLElement).dataset.framework as LoadTestFramework;
+      });
+    }
+
+    // HTTP method toggle — show/hide body section
+    const methodSelect = document.getElementById('loadtest-method') as HTMLSelectElement;
+    const bodySection = document.getElementById('loadtest-body-section');
+    if (methodSelect && bodySection) {
+      const updateBodyVisibility = () => {
+        const m = methodSelect.value;
+        bodySection.style.display = (m === 'POST' || m === 'PUT' || m === 'PATCH') ? '' : 'none';
+      };
+      updateBodyVisibility();
+      methodSelect.addEventListener('change', updateBodyVisibility);
+    }
+
+    // Auto-format JSON in body textarea on blur, paste, and button click.
+    // Template variables ($randInt etc.) aren't valid JSON, so we swap them
+    // out for safe placeholders before parsing, then restore after formatting.
+    const bodyTextarea = document.getElementById('loadtest-body') as HTMLTextAreaElement;
+    if (bodyTextarea) {
+      const templateVars = ['$randomEmail', '$randString', '$randFloat', '$timestamp', '$randInt', '$uuid'];
+
+      const formatBody = (showError: boolean): void => {
+        const raw = bodyTextarea.value.trim();
+        if (!raw) return;
+
+        // Strategy: replace each template var with a unique integer so the
+        // string becomes valid JSON.  After formatting, swap them back.
+        // We use large sentinel numbers (900001, 900002, …) unlikely to
+        // collide with real values.
+        let safe = raw;
+        const restores: [string, string][] = []; // [placeholder-in-output, original-text]
+        let sentinel = 900001;
+
+        for (const v of templateVars) {
+          if (!safe.includes(v)) continue;
+
+          // Quoted form:  "$var"  →  "PLACEHOLDER_Q"  (stays a string after stringify)
+          const qph = `__PH_Q_${sentinel}__`;
+          if (safe.includes(`"${v}"`)) {
+            safe = safe.split(`"${v}"`).join(`"${qph}"`);
+            restores.push([`"${qph}"`, `"${v}"`]);
+          }
+
+          // Bare form:  $var  →  sentinel number  (stays a number after stringify)
+          const bph = sentinel;
+          if (safe.includes(v)) {
+            safe = safe.split(v).join(String(bph));
+            restores.push([String(bph), v]);
+          }
+
+          sentinel++;
+        }
+
+        try {
+          const parsed = JSON.parse(safe);
+          let formatted = JSON.stringify(parsed, null, 2);
+          for (const [ph, original] of restores) {
+            formatted = formatted.split(ph).join(original);
+          }
+          bodyTextarea.value = formatted;
+          // Auto-resize to fit formatted content
+          bodyTextarea.style.height = 'auto';
+          bodyTextarea.style.height = bodyTextarea.scrollHeight + 'px';
+          if (showError) this.showSuccess('Formatted');
+        } catch {
+          if (showError) this.showError('Body is not valid JSON — check syntax');
+        }
+      };
+
+      bodyTextarea.addEventListener('blur', () => formatBody(false));
+      bodyTextarea.addEventListener('paste', () => {
+        setTimeout(() => formatBody(false), 0);
+      });
+
+      const formatBtn = document.getElementById('btn-format-body');
+      if (formatBtn) {
+        formatBtn.addEventListener('click', () => formatBody(true));
+      }
+    }
+
+    // Generate load test script
+    const genLoadTestBtn = document.getElementById('btn-generate-loadtest');
+    if (genLoadTestBtn) {
+      genLoadTestBtn.addEventListener('click', () => this.generateLoadTestScript());
+    }
+
+    // Copy load test output
+    const copyLoadTestBtn = document.getElementById('btn-copy-loadtest');
+    if (copyLoadTestBtn) {
+      copyLoadTestBtn.addEventListener('click', () => {
+        const code = document.getElementById('loadtest-code');
+        if (code) {
+          navigator.clipboard.writeText(code.textContent || '').then(() => {
+            this.showSuccess('Script copied to clipboard!');
+          });
+        }
+      });
+    }
+
+    // Download load test script
+    const downloadLoadTestBtn = document.getElementById('btn-download-loadtest');
+    if (downloadLoadTestBtn) {
+      downloadLoadTestBtn.addEventListener('click', () => this.downloadLoadTestScript());
     }
 
     // Playback speed
@@ -298,6 +413,7 @@ class App {
       this.services.config.saveLocal(config);
 
       const result = await this.services.simulation.run(config);
+      this.lastResult = result;
 
       // Show results, hide placeholder
       const placeholder = document.getElementById('sim-placeholder');
@@ -668,6 +784,97 @@ class App {
     const config = this.controls.getConfig();
     const target = this.services.export.generate(config);
     this.showExportOutput(target.content, `${config.platform}-config`);
+  }
+
+  private parseHeaders(raw: string): Record<string, string> {
+    const headers: Record<string, string> = {};
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx > 0) {
+        const key = trimmed.slice(0, colonIdx).trim();
+        const value = trimmed.slice(colonIdx + 1).trim();
+        if (key) headers[key] = value;
+      }
+    }
+    return headers;
+  }
+
+  private generateLoadTestScript(): void {
+    const config = this.controls.getConfig();
+    const targetUrl = (document.getElementById('loadtest-target-url') as HTMLInputElement)?.value || 'https://api.example.com/endpoint';
+    const avgResponseTimeMs = parseFloat((document.getElementById('loadtest-avg-response') as HTMLInputElement)?.value || '100');
+    const method = ((document.getElementById('loadtest-method') as HTMLSelectElement)?.value || 'GET') as HttpMethod;
+    const headersRaw = (document.getElementById('loadtest-headers') as HTMLTextAreaElement)?.value || '';
+    const body = (document.getElementById('loadtest-body') as HTMLTextAreaElement)?.value || '';
+
+    const request: LoadTestRequestConfig = {
+      method,
+      headers: this.parseHeaders(headersRaw),
+      body,
+    };
+
+    // Run validation
+    const validation = this.services.loadTestExport.validate(config, this.selectedFramework);
+    const warningsEl = document.getElementById('loadtest-warnings');
+    if (warningsEl) {
+      if (validation.warnings.length > 0) {
+        warningsEl.innerHTML = validation.warnings
+          .map(w => `<div class="loadtest-warning-item">\u26A0 ${w}</div>`)
+          .join('');
+        warningsEl.classList.remove('hidden');
+      } else {
+        warningsEl.classList.add('hidden');
+      }
+    }
+
+    if (!validation.valid) {
+      this.showError('Cannot generate: ' + validation.errors.join('; '));
+      return;
+    }
+
+    const script = this.services.loadTestExport.generate(config, {
+      framework: this.selectedFramework,
+      targetUrl,
+      avgResponseTimeMs,
+      request,
+    }, this.lastResult || undefined);
+
+    // Show output
+    const container = document.getElementById('loadtest-output');
+    const code = document.getElementById('loadtest-code');
+    const label = document.getElementById('loadtest-label');
+    const exporter = this.services.loadTestExport.getExporter(this.selectedFramework);
+
+    if (container) container.classList.remove('hidden');
+    if (code) code.textContent = script;
+    if (label) label.textContent = `${exporter.name} script`;
+  }
+
+  private downloadLoadTestScript(): void {
+    const code = document.getElementById('loadtest-code');
+    if (!code || !code.textContent) return;
+
+    const exporter = this.services.loadTestExport.getExporter(this.selectedFramework);
+    const filenames: Record<string, string> = {
+      k6: 'scalings-loadtest.js',
+      gatling: 'ScalingsSimulation.java',
+      locust: 'scalings_loadtest.py',
+      jmeter: 'scalings-loadtest.jmx',
+      artillery: 'scalings-loadtest.yml',
+    };
+    const mimeTypes: Record<string, string> = {
+      k6: 'application/javascript',
+      gatling: 'text/x-java-source',
+      locust: 'text/x-python',
+      jmeter: 'application/xml',
+      artillery: 'text/yaml',
+    };
+
+    const filename = filenames[this.selectedFramework] || `scalings-loadtest.${exporter.extension}`;
+    const mimeType = mimeTypes[this.selectedFramework] || 'text/plain';
+    this.offerDownload(code.textContent, filename, mimeType);
   }
 
   private copyExportOutput(): void {

@@ -8,16 +8,19 @@ import { LocalSimulationService } from './services/simulation.js';
 import { LocalConfigService } from './services/config.js';
 import { LocalExportService } from './services/export.js';
 import { LocalTrafficPatternService } from './services/traffic.js';
+import { LocalLoadTestExportService } from './services/loadtest/index.js';
 export function createServices() {
     const traffic = new LocalTrafficPatternService();
     const simulation = new LocalSimulationService(traffic);
     const config = new LocalConfigService();
     const exportService = new LocalExportService();
+    const loadTestExport = new LocalLoadTestExportService();
     return {
         simulation,
         config,
         export: exportService,
         traffic,
+        loadTestExport,
     };
 }
 //# sourceMappingURL=factory.js.map

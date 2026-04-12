@@ -616,6 +616,76 @@
           </div>
         </div>
       </div>
+
+      <!-- Load Test Export -->
+      <div class="loadtest-export-section">
+        <h3 class="loadtest-heading">Load Test Export</h3>
+        <p class="loadtest-description">Generate a ready-to-run load test script for your traffic scenario.</p>
+
+        <div class="loadtest-framework-toggle" role="group" aria-label="Select load test framework">
+          <button class="framework-btn active" data-framework="k6" title="k6 by Grafana — modern JS-based load testing">k6</button>
+          <button class="framework-btn" data-framework="gatling" title="Gatling — JVM-based load testing for enterprise">Gatling</button>
+          <button class="framework-btn" data-framework="locust" title="Locust — Python-based load testing">Locust</button>
+          <button class="framework-btn" data-framework="jmeter" title="Apache JMeter — Java load testing (JMX format)">JMeter</button>
+          <button class="framework-btn" data-framework="artillery" title="Artillery — Node.js load testing (YAML config)">Artillery</button>
+        </div>
+
+        <div class="loadtest-options">
+          <div class="loadtest-option loadtest-option-narrow">
+            <label for="loadtest-method" title="HTTP method for the load test request">Method</label>
+            <select id="loadtest-method" title="HTTP request method">
+              <option value="GET" selected>GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+          </div>
+          <div class="loadtest-option">
+            <label for="loadtest-target-url" title="The HTTP endpoint to test. Appears as the target URL in the generated script.">Target URL</label>
+            <input type="text" id="loadtest-target-url" value="https://api.example.com/endpoint" placeholder="https://api.example.com/endpoint" title="The URL your load test will send requests to">
+          </div>
+          <div class="loadtest-option loadtest-option-narrow">
+            <label for="loadtest-avg-response" title="Average response time of your service in milliseconds. Used to calculate the number of virtual users (VUs = RPS x response_time).">Avg Response Time (ms)</label>
+            <input type="number" id="loadtest-avg-response" value="100" min="1" max="60000" title="Average response time in ms — used for RPS-to-VU conversion">
+          </div>
+        </div>
+
+        <div class="loadtest-options">
+          <div class="loadtest-option">
+            <label for="loadtest-headers" title="HTTP headers as key:value pairs, one per line. Values may contain template variables.">Headers <span class="loadtest-hint">(one per line, key: value)</span></label>
+            <textarea id="loadtest-headers" rows="2" placeholder="Content-Type: application/json&#10;Authorization: Bearer <token>" title="Custom HTTP headers — one per line as key: value"></textarea>
+          </div>
+        </div>
+
+        <div class="loadtest-options" id="loadtest-body-section">
+          <div class="loadtest-option">
+            <div class="loadtest-body-label-row">
+              <label for="loadtest-body" title="Request body (for POST/PUT/PATCH). Use template variables for dynamic data.">Body <span class="loadtest-hint">(<code>$randInt</code> <code>$randString</code> <code>$uuid</code> <code>$timestamp</code> <code>$randFloat</code> <code>$randomEmail</code>)</span></label>
+              <button type="button" id="btn-format-body" class="btn btn-small loadtest-format-btn" title="Format JSON body">Format JSON</button>
+            </div>
+            <textarea id="loadtest-body" rows="4" placeholder='{"name": "$randString", "id": $randInt, "email": "$randomEmail"}' title="Request body — use template variables like $randInt, $randString, $uuid for dynamic data per request"></textarea>
+          </div>
+        </div>
+
+        <div class="loadtest-actions">
+          <button id="btn-generate-loadtest" class="btn btn-small btn-secondary" title="Generate a load test script for the selected framework">Generate Script</button>
+        </div>
+
+        <div id="loadtest-warnings" class="loadtest-warnings hidden"></div>
+
+        <div id="loadtest-output" class="export-output hidden">
+          <div class="export-output-header">
+            <span id="loadtest-label">Output</span>
+            <div class="loadtest-output-actions">
+              <button id="btn-copy-loadtest" class="btn btn-small" title="Copy script to clipboard">Copy</button>
+              <button id="btn-download-loadtest" class="btn btn-small" title="Download script as a file">Download</button>
+            </div>
+          </div>
+          <pre><code id="loadtest-code"></code></pre>
+        </div>
+      </div>
+
       <div id="export-output" class="export-output hidden">
         <div class="export-output-header">
           <span id="export-label">Output</span>

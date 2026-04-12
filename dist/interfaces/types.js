@@ -1,6 +1,30 @@
 // ============================================================================
 // scalings.xyz — Type Definitions
 // ============================================================================
+/**
+ * Template variables available in body and header values.
+ * Each exporter maps these to framework-native syntax.
+ *
+ *   $randInt        — random integer 0–10000
+ *   $randString     — random alphanumeric string (10 chars)
+ *   $uuid           — UUID v4
+ *   $timestamp      — current Unix timestamp (ms)
+ *   $randFloat      — random float 0.0–1.0
+ *   $randomEmail    — random email address
+ */
+export const LOAD_TEST_TEMPLATE_VARS = [
+    '$randInt',
+    '$randString',
+    '$uuid',
+    '$timestamp',
+    '$randFloat',
+    '$randomEmail',
+];
+export const DEFAULT_LOAD_TEST_REQUEST = {
+    method: 'GET',
+    headers: {},
+    body: '',
+};
 // --- Default Values ---
 export const DEFAULT_SIMULATION = {
     duration: 600,
