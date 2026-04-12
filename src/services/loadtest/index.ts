@@ -51,7 +51,7 @@ export class LocalLoadTestExportService implements LoadTestExportService {
 
   generate(config: SimulationConfig, options: LoadTestExportOptions, results?: SimulationResult): string {
     const exporter = this.getExporter(options.framework);
-    return exporter.generate(config, options.targetUrl, options.avgResponseTimeMs, results);
+    return exporter.generate(config, options.targetUrl, options.avgResponseTimeMs, options.request, results);
   }
 
   validate(config: SimulationConfig, framework: LoadTestFramework): LoadTestValidationResult {

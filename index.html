@@ -631,6 +631,16 @@
         </div>
 
         <div class="loadtest-options">
+          <div class="loadtest-option loadtest-option-narrow">
+            <label for="loadtest-method" title="HTTP method for the load test request">Method</label>
+            <select id="loadtest-method" title="HTTP request method">
+              <option value="GET" selected>GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+          </div>
           <div class="loadtest-option">
             <label for="loadtest-target-url" title="The HTTP endpoint to test. Appears as the target URL in the generated script.">Target URL</label>
             <input type="text" id="loadtest-target-url" value="https://api.example.com/endpoint" placeholder="https://api.example.com/endpoint" title="The URL your load test will send requests to">
@@ -638,6 +648,20 @@
           <div class="loadtest-option loadtest-option-narrow">
             <label for="loadtest-avg-response" title="Average response time of your service in milliseconds. Used to calculate the number of virtual users (VUs = RPS x response_time).">Avg Response Time (ms)</label>
             <input type="number" id="loadtest-avg-response" value="100" min="1" max="60000" title="Average response time in ms — used for RPS-to-VU conversion">
+          </div>
+        </div>
+
+        <div class="loadtest-options">
+          <div class="loadtest-option">
+            <label for="loadtest-headers" title="HTTP headers as key:value pairs, one per line. Values may contain template variables.">Headers <span class="loadtest-hint">(one per line, key: value)</span></label>
+            <textarea id="loadtest-headers" rows="2" placeholder="Content-Type: application/json&#10;Authorization: Bearer <token>" title="Custom HTTP headers — one per line as key: value"></textarea>
+          </div>
+        </div>
+
+        <div class="loadtest-options" id="loadtest-body-section">
+          <div class="loadtest-option">
+            <label for="loadtest-body" title="Request body (for POST/PUT/PATCH). Use template variables for dynamic data.">Body <span class="loadtest-hint">(<code>$randInt</code> <code>$randString</code> <code>$uuid</code> <code>$timestamp</code> <code>$randFloat</code> <code>$randomEmail</code>)</span></label>
+            <textarea id="loadtest-body" rows="4" placeholder='{"name": "$randString", "id": $randInt, "email": "$randomEmail"}' title="Request body — use template variables like $randInt, $randString, $uuid for dynamic data per request"></textarea>
           </div>
         </div>
 

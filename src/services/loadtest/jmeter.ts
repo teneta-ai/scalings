@@ -4,6 +4,7 @@
 
 import {
   LoadTestExporter,
+  LoadTestRequestConfig,
   LoadTestValidationResult,
   SimulationConfig,
   SimulationResult,
@@ -21,7 +22,7 @@ export class JMeterExporter implements LoadTestExporter {
   readonly name = 'JMeter';
   readonly extension = 'jmx';
 
-  generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, results?: SimulationResult): string {
+  generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, request: LoadTestRequestConfig, results?: SimulationResult): string {
     const avgResponseSec = avgResponseTime / 1000;
     const duration = config.simulation.duration;
     const traffic = config.producer.traffic;
@@ -40,7 +41,7 @@ export class JMeterExporter implements LoadTestExporter {
       parsedUrl = { protocol: 'https', host: 'api.example.com', port: '443', path: '/' };
     }
 
-    const threadGroups = this.buildThreadGroups(traffic.pattern, traffic.params, duration, avgResponseSec);
+    const threadGroups = this.buildThreadGroups(traffic.pattern, traffic.params, duration, avgResponseSec, request);
     const assertions = this.buildAssertions(results);
 
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -137,20 +138,27 @@ ${assertions}
     return { valid: errors.length === 0, warnings, errors };
   }
 
-  private buildThreadGroups(pattern: string, params: unknown, duration: number, avgResponseSec: number): string {
+  private buildThreadGroups(pattern: string, params: unknown, duration: number, avgResponseSec: number, request: LoadTestRequestConfig): string {
     switch (pattern) {
-      case 'steady': return this.steadyThreadGroup(params as SteadyParams, duration, avgResponseSec);
-      case 'gradual': return this.gradualThreadGroup(params as GradualParams, duration, avgResponseSec);
-      case 'spike': return this.spikeThreadGroup(params as SpikeParams, duration, avgResponseSec);
-      case 'wave': return this.waveThreadGroup(params as WaveParams, duration, avgResponseSec);
-      case 'step': return this.stepThreadGroup(params as StepParams, avgResponseSec);
+      case 'steady': return this.steadyThreadGroup(params as SteadyParams, duration, avgResponseSec, request);
+      case 'gradual': return this.gradualThreadGroup(params as GradualParams, duration, avgResponseSec, request);
+      case 'spike': return this.spikeThreadGroup(params as SpikeParams, duration, avgResponseSec, request);
+      case 'wave': return this.waveThreadGroup(params as WaveParams, duration, avgResponseSec, request);
+      case 'step': return this.stepThreadGroup(params as StepParams, avgResponseSec, request);
       case 'custom':
-      case 'grafana': return this.customThreadGroup(params as CustomParams, duration, avgResponseSec);
-      default: return this.steadyThreadGroup({ rps: 100 }, duration, avgResponseSec);
+      case 'grafana': return this.customThreadGroup(params as CustomParams, duration, avgResponseSec, request);
+      default: return this.steadyThreadGroup({ rps: 100 }, duration, avgResponseSec, request);
     }
   }
 
-  private wrapThreadGroup(name: string, threads: number, rampUp: number, duration: number): string {
+  private wrapThreadGroup(name: string, threads: number, rampUp: number, duration: number, request: LoadTestRequestConfig): string {
+    const method = this.escapeXml(request.method);
+    const hasBody = request.body && ['POST', 'PUT', 'PATCH'].includes(request.method);
+    const bodyXml = hasBody
+      ? `\n          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>\n          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">\n            <collectionProp name="Arguments.arguments">\n              <elementProp name="" elementType="HTTPArgument">\n                <stringProp name="Argument.value">${this.escapeXml(this.replaceTemplateVars(request.body))}</stringProp>\n              </elementProp>\n            </collectionProp>\n          </elementProp>`
+      : '';
+    const headerXml = this.buildHeaderManager(request.headers);
+
     return `      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="${this.escapeXml(name)}">
         <intProp name="ThreadGroup.num_threads">${threads}</intProp>
         <intProp name="ThreadGroup.ramp_time">${rampUp}</intProp>
@@ -164,14 +172,14 @@ ${assertions}
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request">
           <stringProp name="HTTPSampler.path">\${TARGET_PATH}</stringProp>
-          <stringProp name="HTTPSampler.method">GET</stringProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.method">${method}</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>${bodyXml}
         </HTTPSamplerProxy>
         <hashTree/>
-      </hashTree>`;
+${headerXml}      </hashTree>`;
   }
 
-  private wrapUltimateThreadGroup(name: string, schedule: { threads: number; initDelay: number; startupTime: number; holdTime: number; shutdownTime: number }[]): string {
+  private wrapUltimateThreadGroup(name: string, schedule: { threads: number; initDelay: number; startupTime: number; holdTime: number; shutdownTime: number }[], request: LoadTestRequestConfig): string {
     const rows = schedule.map(row =>
       `            <collectionProp name="">
               <stringProp name="threads">${row.threads}</stringProp>
@@ -182,6 +190,13 @@ ${assertions}
             </collectionProp>`
     ).join('\n');
 
+    const method = this.escapeXml(request.method);
+    const hasBody = request.body && ['POST', 'PUT', 'PATCH'].includes(request.method);
+    const bodyXml = hasBody
+      ? `\n          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>\n          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">\n            <collectionProp name="Arguments.arguments">\n              <elementProp name="" elementType="HTTPArgument">\n                <stringProp name="Argument.value">${this.escapeXml(this.replaceTemplateVars(request.body))}</stringProp>\n              </elementProp>\n            </collectionProp>\n          </elementProp>`
+      : '';
+    const headerXml = this.buildHeaderManager(request.headers);
+
     return `      <!-- Requires JMeter Plugins: Ultimate Thread Group -->
       <kg.apc.jmeter.threads.UltimateThreadGroup guiclass="kg.apc.jmeter.threads.UltimateThreadGroupGui" testclass="kg.apc.jmeter.threads.UltimateThreadGroup" testname="${this.escapeXml(name)}">
         <collectionProp name="ultimatethreadgroupdata">
@@ -191,29 +206,29 @@ ${rows}
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request">
           <stringProp name="HTTPSampler.path">\${TARGET_PATH}</stringProp>
-          <stringProp name="HTTPSampler.method">GET</stringProp>
-          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.method">${method}</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>${bodyXml}
         </HTTPSamplerProxy>
         <hashTree/>
-      </hashTree>`;
+${headerXml}      </hashTree>`;
   }
 
   private rpsToThreads(rps: number, avgResponseSec: number): number {
     return Math.max(1, Math.ceil(rps * avgResponseSec));
   }
 
-  private steadyThreadGroup(params: SteadyParams, duration: number, avgResponseSec: number): string {
+  private steadyThreadGroup(params: SteadyParams, duration: number, avgResponseSec: number, request: LoadTestRequestConfig): string {
     const threads = this.rpsToThreads(params.rps, avgResponseSec);
-    return this.wrapThreadGroup('Steady Load', threads, Math.min(10, Math.floor(duration / 10)), duration);
+    return this.wrapThreadGroup('Steady Load', threads, Math.min(10, Math.floor(duration / 10)), duration, request);
   }
 
-  private gradualThreadGroup(params: GradualParams, duration: number, avgResponseSec: number): string {
+  private gradualThreadGroup(params: GradualParams, duration: number, avgResponseSec: number, request: LoadTestRequestConfig): string {
     const endThreads = this.rpsToThreads(Math.max(params.start_rps, params.end_rps), avgResponseSec);
     const startThreads = this.rpsToThreads(Math.min(params.start_rps, params.end_rps), avgResponseSec);
-    return this.wrapThreadGroup('Gradual Ramp', endThreads, duration, duration);
+    return this.wrapThreadGroup('Gradual Ramp', endThreads, duration, duration, request);
   }
 
-  private spikeThreadGroup(params: SpikeParams, duration: number, avgResponseSec: number): string {
+  private spikeThreadGroup(params: SpikeParams, duration: number, avgResponseSec: number, request: LoadTestRequestConfig): string {
     const baseThreads = this.rpsToThreads(params.base_rps, avgResponseSec);
     const spikeThreads = this.rpsToThreads(params.spike_rps, avgResponseSec);
     const spikeExtra = spikeThreads - baseThreads;
@@ -221,10 +236,10 @@ ${rows}
     return this.wrapUltimateThreadGroup('Spike Traffic', [
       { threads: baseThreads, initDelay: 0, startupTime: 5, holdTime: duration - 5, shutdownTime: 0 },
       { threads: Math.max(1, spikeExtra), initDelay: params.spike_start, startupTime: 1, holdTime: params.spike_duration, shutdownTime: 1 },
-    ]);
+    ], request);
   }
 
-  private waveThreadGroup(params: WaveParams, duration: number, avgResponseSec: number): string {
+  private waveThreadGroup(params: WaveParams, duration: number, avgResponseSec: number, request: LoadTestRequestConfig): string {
     // Approximate wave with Ultimate Thread Group steps
     const stepsPerPeriod = 8;
     const periods = Math.max(1, Math.floor(duration / params.period));
@@ -245,10 +260,10 @@ ${rows}
       });
     }
 
-    return this.wrapUltimateThreadGroup('Wave Traffic', schedule);
+    return this.wrapUltimateThreadGroup('Wave Traffic', schedule, request);
   }
 
-  private stepThreadGroup(params: StepParams, avgResponseSec: number): string {
+  private stepThreadGroup(params: StepParams, avgResponseSec: number, request: LoadTestRequestConfig): string {
     const schedule: { threads: number; initDelay: number; startupTime: number; holdTime: number; shutdownTime: number }[] = [];
     let offset = 0;
 
@@ -264,12 +279,12 @@ ${rows}
       offset += step.duration;
     }
 
-    return this.wrapUltimateThreadGroup('Step Function', schedule);
+    return this.wrapUltimateThreadGroup('Step Function', schedule, request);
   }
 
-  private customThreadGroup(params: CustomParams, duration: number, avgResponseSec: number): string {
+  private customThreadGroup(params: CustomParams, duration: number, avgResponseSec: number, request: LoadTestRequestConfig): string {
     const series = params.series;
-    if (!series || series.length === 0) return this.steadyThreadGroup({ rps: 100 }, duration, avgResponseSec);
+    if (!series || series.length === 0) return this.steadyThreadGroup({ rps: 100 }, duration, avgResponseSec, request);
 
     const schedule: { threads: number; initDelay: number; startupTime: number; holdTime: number; shutdownTime: number }[] = [];
 
@@ -288,7 +303,7 @@ ${rows}
       });
     }
 
-    return this.wrapUltimateThreadGroup('Custom Traffic', schedule);
+    return this.wrapUltimateThreadGroup('Custom Traffic', schedule, request);
   }
 
   private buildAssertions(results?: SimulationResult): string {
@@ -320,6 +335,36 @@ ${rows}
       case 'grafana': return Math.max(...((p as CustomParams).series || []).map(s => s.rps), 0);
       default: return 0;
     }
+  }
+
+  private replaceTemplateVars(str: string): string {
+    return str
+      .replace(/\$randInt/g, '${__Random(0,10000,)}')
+      .replace(/\$randString/g, '${__RandomString(10,abcdefghijklmnopqrstuvwxyz0123456789,)}')
+      .replace(/\$uuid/g, '${__UUID()}')
+      .replace(/\$timestamp/g, '${__time(,)}')
+      .replace(/\$randFloat/g, '${__groovy(Math.random(),)}')
+      .replace(/\$randomEmail/g, 'user${__Random(0,99999,)}@loadtest.scalings.xyz');
+  }
+
+  private buildHeaderManager(headers: Record<string, string>): string {
+    const entries = Object.entries(headers);
+    if (entries.length === 0) return '';
+
+    const headerElements = entries.map(([name, value]) =>
+      `          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">${this.escapeXml(name)}</stringProp>
+            <stringProp name="Header.value">${this.escapeXml(this.replaceTemplateVars(value))}</stringProp>
+          </elementProp>`
+    ).join('\n');
+
+    return `        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header Manager">
+          <collectionProp name="HeaderManager.headers">
+${headerElements}
+          </collectionProp>
+        </HeaderManager>
+        <hashTree/>
+`;
   }
 
   private escapeXml(str: string): string {

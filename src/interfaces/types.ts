@@ -214,6 +214,36 @@ export interface SimulationSummary {
 
 export type LoadTestFramework = 'k6' | 'gatling' | 'locust' | 'jmeter' | 'artillery';
 
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+/**
+ * Template variables available in body and header values.
+ * Each exporter maps these to framework-native syntax.
+ *
+ *   $randInt        — random integer 0–10000
+ *   $randString     — random alphanumeric string (10 chars)
+ *   $uuid           — UUID v4
+ *   $timestamp      — current Unix timestamp (ms)
+ *   $randFloat      — random float 0.0–1.0
+ *   $randomEmail    — random email address
+ */
+export const LOAD_TEST_TEMPLATE_VARS = [
+  '$randInt',
+  '$randString',
+  '$uuid',
+  '$timestamp',
+  '$randFloat',
+  '$randomEmail',
+] as const;
+
+export type LoadTestTemplateVar = typeof LOAD_TEST_TEMPLATE_VARS[number];
+
+export interface LoadTestRequestConfig {
+  method: HttpMethod;
+  headers: Record<string, string>;   // header-name → value (may contain template vars)
+  body: string;                       // raw body string (may contain template vars)
+}
+
 export interface LoadTestValidationResult {
   valid: boolean;
   warnings: string[];
@@ -228,7 +258,7 @@ export interface LoadTestExporter {
   /** File extension for the exported script */
   readonly extension: string;
   /** Generate the load test script from simulation config */
-  generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, results?: SimulationResult): string;
+  generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, request: LoadTestRequestConfig, results?: SimulationResult): string;
   /** Validate that the config can be exported to this framework */
   validate(config: SimulationConfig): LoadTestValidationResult;
 }
@@ -237,6 +267,7 @@ export interface LoadTestExportOptions {
   framework: LoadTestFramework;
   targetUrl: string;
   avgResponseTimeMs: number;
+  request: LoadTestRequestConfig;
 }
 
 // --- Service Interfaces ---
@@ -269,6 +300,12 @@ export interface LoadTestExportService {
   generate(config: SimulationConfig, options: LoadTestExportOptions, results?: SimulationResult): string;
   validate(config: SimulationConfig, framework: LoadTestFramework): LoadTestValidationResult;
 }
+
+export const DEFAULT_LOAD_TEST_REQUEST: LoadTestRequestConfig = {
+  method: 'GET',
+  headers: {},
+  body: '',
+};
 
 // --- Preset Scenarios ---
 

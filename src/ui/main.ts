@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { createServices, ServiceContainer } from '../factory.js';
-import { SimulationConfig, SimulationResult, SimulationSummary, TickSnapshot, LoadTestFramework } from '../interfaces/types.js';
+import { SimulationConfig, SimulationResult, SimulationSummary, TickSnapshot, LoadTestFramework, LoadTestRequestConfig, HttpMethod } from '../interfaces/types.js';
 import { UIControls } from './controls.js';
 import { ChartRenderer } from './chart.js';
 
@@ -137,6 +137,18 @@ class App {
         btn.classList.add('active');
         this.selectedFramework = (btn as HTMLElement).dataset.framework as LoadTestFramework;
       });
+    }
+
+    // HTTP method toggle — show/hide body section
+    const methodSelect = document.getElementById('loadtest-method') as HTMLSelectElement;
+    const bodySection = document.getElementById('loadtest-body-section');
+    if (methodSelect && bodySection) {
+      const updateBodyVisibility = () => {
+        const m = methodSelect.value;
+        bodySection.style.display = (m === 'POST' || m === 'PUT' || m === 'PATCH') ? '' : 'none';
+      };
+      updateBodyVisibility();
+      methodSelect.addEventListener('change', updateBodyVisibility);
     }
 
     // Generate load test script
@@ -708,10 +720,34 @@ class App {
     this.showExportOutput(target.content, `${config.platform}-config`);
   }
 
+  private parseHeaders(raw: string): Record<string, string> {
+    const headers: Record<string, string> = {};
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx > 0) {
+        const key = trimmed.slice(0, colonIdx).trim();
+        const value = trimmed.slice(colonIdx + 1).trim();
+        if (key) headers[key] = value;
+      }
+    }
+    return headers;
+  }
+
   private generateLoadTestScript(): void {
     const config = this.controls.getConfig();
     const targetUrl = (document.getElementById('loadtest-target-url') as HTMLInputElement)?.value || 'https://api.example.com/endpoint';
     const avgResponseTimeMs = parseFloat((document.getElementById('loadtest-avg-response') as HTMLInputElement)?.value || '100');
+    const method = ((document.getElementById('loadtest-method') as HTMLSelectElement)?.value || 'GET') as HttpMethod;
+    const headersRaw = (document.getElementById('loadtest-headers') as HTMLTextAreaElement)?.value || '';
+    const body = (document.getElementById('loadtest-body') as HTMLTextAreaElement)?.value || '';
+
+    const request: LoadTestRequestConfig = {
+      method,
+      headers: this.parseHeaders(headersRaw),
+      body,
+    };
 
     // Run validation
     const validation = this.services.loadTestExport.validate(config, this.selectedFramework);
@@ -736,6 +772,7 @@ class App {
       framework: this.selectedFramework,
       targetUrl,
       avgResponseTimeMs,
+      request,
     }, this.lastResult || undefined);
 
     // Show output

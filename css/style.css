@@ -1350,7 +1350,9 @@ button:active, .btn:active {
   margin-bottom: 0.3rem;
 }
 
-.loadtest-option input {
+.loadtest-option input,
+.loadtest-option select,
+.loadtest-option textarea {
   width: 100%;
   font-family: var(--font-mono);
   font-size: 0.8rem;
@@ -1362,9 +1364,41 @@ button:active, .btn:active {
   transition: border-color var(--transition);
 }
 
-.loadtest-option input:focus {
+.loadtest-option select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2371717a' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  padding-right: 1.5rem;
+}
+
+.loadtest-option textarea {
+  resize: vertical;
+  min-height: 2.4rem;
+  line-height: 1.4;
+}
+
+.loadtest-option input:focus,
+.loadtest-option select:focus,
+.loadtest-option textarea:focus {
   outline: none;
   border-color: var(--cyan-dim);
+}
+
+.loadtest-hint {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.loadtest-hint code {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.06);
+  padding: 0.05rem 0.25rem;
+  border-radius: 2px;
 }
 
 .loadtest-actions {

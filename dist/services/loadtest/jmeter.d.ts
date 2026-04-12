@@ -1,9 +1,9 @@
-import { LoadTestExporter, LoadTestValidationResult, SimulationConfig, SimulationResult } from '../../interfaces/types.js';
+import { LoadTestExporter, LoadTestRequestConfig, LoadTestValidationResult, SimulationConfig, SimulationResult } from '../../interfaces/types.js';
 export declare class JMeterExporter implements LoadTestExporter {
     readonly id: "jmeter";
     readonly name = "JMeter";
     readonly extension = "jmx";
-    generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, results?: SimulationResult): string;
+    generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, request: LoadTestRequestConfig, results?: SimulationResult): string;
     validate(config: SimulationConfig): LoadTestValidationResult;
     private buildThreadGroups;
     private wrapThreadGroup;
@@ -17,5 +17,7 @@ export declare class JMeterExporter implements LoadTestExporter {
     private customThreadGroup;
     private buildAssertions;
     private estimatePeakRps;
+    private replaceTemplateVars;
+    private buildHeaderManager;
     private escapeXml;
 }

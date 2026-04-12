@@ -1,10 +1,12 @@
-import { LoadTestExporter, LoadTestValidationResult, SimulationConfig, SimulationResult } from '../../interfaces/types.js';
+import { LoadTestExporter, LoadTestRequestConfig, LoadTestValidationResult, SimulationConfig, SimulationResult } from '../../interfaces/types.js';
 export declare class GatlingExporter implements LoadTestExporter {
     readonly id: "gatling";
     readonly name = "Gatling";
     readonly extension = "java";
-    generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, results?: SimulationResult): string;
+    generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, request: LoadTestRequestConfig, results?: SimulationResult): string;
     validate(config: SimulationConfig): LoadTestValidationResult;
+    private replaceTemplateVars;
+    private escapeJavaString;
     private buildInjection;
     private steadyInjection;
     private gradualInjection;

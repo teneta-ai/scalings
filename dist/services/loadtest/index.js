@@ -33,7 +33,7 @@ export class LocalLoadTestExportService {
     }
     generate(config, options, results) {
         const exporter = this.getExporter(options.framework);
-        return exporter.generate(config, options.targetUrl, options.avgResponseTimeMs, results);
+        return exporter.generate(config, options.targetUrl, options.avgResponseTimeMs, options.request, results);
     }
     validate(config, framework) {
         const exporter = this.getExporter(framework);

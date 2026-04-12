@@ -121,6 +121,17 @@ class App {
                 this.selectedFramework = btn.dataset.framework;
             });
         }
+        // HTTP method toggle — show/hide body section
+        const methodSelect = document.getElementById('loadtest-method');
+        const bodySection = document.getElementById('loadtest-body-section');
+        if (methodSelect && bodySection) {
+            const updateBodyVisibility = () => {
+                const m = methodSelect.value;
+                bodySection.style.display = (m === 'POST' || m === 'PUT' || m === 'PATCH') ? '' : 'none';
+            };
+            updateBodyVisibility();
+            methodSelect.addEventListener('change', updateBodyVisibility);
+        }
         // Generate load test script
         const genLoadTestBtn = document.getElementById('btn-generate-loadtest');
         if (genLoadTestBtn) {
@@ -683,10 +694,34 @@ class App {
         const target = this.services.export.generate(config);
         this.showExportOutput(target.content, `${config.platform}-config`);
     }
+    parseHeaders(raw) {
+        const headers = {};
+        for (const line of raw.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed)
+                continue;
+            const colonIdx = trimmed.indexOf(':');
+            if (colonIdx > 0) {
+                const key = trimmed.slice(0, colonIdx).trim();
+                const value = trimmed.slice(colonIdx + 1).trim();
+                if (key)
+                    headers[key] = value;
+            }
+        }
+        return headers;
+    }
     generateLoadTestScript() {
         const config = this.controls.getConfig();
         const targetUrl = document.getElementById('loadtest-target-url')?.value || 'https://api.example.com/endpoint';
         const avgResponseTimeMs = parseFloat(document.getElementById('loadtest-avg-response')?.value || '100');
+        const method = (document.getElementById('loadtest-method')?.value || 'GET');
+        const headersRaw = document.getElementById('loadtest-headers')?.value || '';
+        const body = document.getElementById('loadtest-body')?.value || '';
+        const request = {
+            method,
+            headers: this.parseHeaders(headersRaw),
+            body,
+        };
         // Run validation
         const validation = this.services.loadTestExport.validate(config, this.selectedFramework);
         const warningsEl = document.getElementById('loadtest-warnings');
@@ -709,6 +744,7 @@ class App {
             framework: this.selectedFramework,
             targetUrl,
             avgResponseTimeMs,
+            request,
         }, this.lastResult || undefined);
         // Show output
         const container = document.getElementById('loadtest-output');
