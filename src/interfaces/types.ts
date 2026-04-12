@@ -210,6 +210,35 @@ export interface SimulationSummary {
   estimated_total_cost: number;
 }
 
+// --- Load Test Export Types ---
+
+export type LoadTestFramework = 'k6' | 'gatling' | 'locust' | 'jmeter' | 'artillery';
+
+export interface LoadTestValidationResult {
+  valid: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface LoadTestExporter {
+  /** Framework identifier */
+  readonly id: LoadTestFramework;
+  /** Human-readable framework name */
+  readonly name: string;
+  /** File extension for the exported script */
+  readonly extension: string;
+  /** Generate the load test script from simulation config */
+  generate(config: SimulationConfig, targetUrl: string, avgResponseTime: number, results?: SimulationResult): string;
+  /** Validate that the config can be exported to this framework */
+  validate(config: SimulationConfig): LoadTestValidationResult;
+}
+
+export interface LoadTestExportOptions {
+  framework: LoadTestFramework;
+  targetUrl: string;
+  avgResponseTimeMs: number;
+}
+
 // --- Service Interfaces ---
 
 export interface SimulationService {
@@ -232,6 +261,13 @@ export interface ExportService {
 export interface TrafficPatternService {
   generate(pattern: TrafficConfig, duration: number, tickInterval: number): number[];
   preview(pattern: TrafficConfig, points?: number): number[];
+}
+
+export interface LoadTestExportService {
+  getExporter(framework: LoadTestFramework): LoadTestExporter;
+  getAvailableFrameworks(): { id: LoadTestFramework; name: string }[];
+  generate(config: SimulationConfig, options: LoadTestExportOptions, results?: SimulationResult): string;
+  validate(config: SimulationConfig, framework: LoadTestFramework): LoadTestValidationResult;
 }
 
 // --- Preset Scenarios ---

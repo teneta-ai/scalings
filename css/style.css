@@ -1273,6 +1273,120 @@ button:active, .btn:active {
   line-height: 1.5;
 }
 
+/* --- Load Test Export Section --- */
+.loadtest-export-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.loadtest-heading {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--lime);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-bottom: 0.4rem;
+}
+
+.loadtest-description {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.loadtest-framework-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.framework-btn {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.framework-btn:hover {
+  border-color: var(--cyan-dim);
+  color: var(--text-primary);
+}
+
+.framework-btn.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(34, 211, 238, 0.08);
+}
+
+.loadtest-options {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.loadtest-option {
+  flex: 1;
+  min-width: 200px;
+}
+
+.loadtest-option-narrow {
+  flex: 0 0 180px;
+  min-width: 140px;
+}
+
+.loadtest-option label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.loadtest-option input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  transition: border-color var(--transition);
+}
+
+.loadtest-option input:focus {
+  outline: none;
+  border-color: var(--cyan-dim);
+}
+
+.loadtest-actions {
+  margin-bottom: 1rem;
+}
+
+.loadtest-warnings {
+  margin-bottom: 0.75rem;
+}
+
+.loadtest-warning-item {
+  font-size: 0.75rem;
+  color: var(--amber);
+  padding: 0.3rem 0;
+  line-height: 1.4;
+}
+
+.loadtest-output-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
 /* --- Docs Section --- */
 .docs-content {
   font-size: 0.9rem;

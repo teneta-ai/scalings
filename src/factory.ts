@@ -10,17 +10,20 @@ import {
   ConfigService,
   ExportService,
   TrafficPatternService,
+  LoadTestExportService,
 } from './interfaces/types.js';
 import { LocalSimulationService } from './services/simulation.js';
 import { LocalConfigService } from './services/config.js';
 import { LocalExportService } from './services/export.js';
 import { LocalTrafficPatternService } from './services/traffic.js';
+import { LocalLoadTestExportService } from './services/loadtest/index.js';
 
 export interface ServiceContainer {
   simulation: SimulationService;
   config: ConfigService;
   export: ExportService;
   traffic: TrafficPatternService;
+  loadTestExport: LoadTestExportService;
 }
 
 export function createServices(): ServiceContainer {
@@ -28,11 +31,13 @@ export function createServices(): ServiceContainer {
   const simulation = new LocalSimulationService(traffic);
   const config = new LocalConfigService();
   const exportService = new LocalExportService();
+  const loadTestExport = new LocalLoadTestExportService();
 
   return {
     simulation,
     config,
     export: exportService,
     traffic,
+    loadTestExport,
   };
 }

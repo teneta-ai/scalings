@@ -18,6 +18,8 @@ class App {
         this.isRecording = false;
         this.recordedRuns = [];
         this.runCounter = 0;
+        this.lastResult = null;
+        this.selectedFramework = 'k6';
         this.services = createServices();
         this.controls = new UIControls(this.services.traffic);
         this.chart = new ChartRenderer();
@@ -108,6 +110,38 @@ class App {
         const copyExportBtn = document.getElementById('btn-copy-export');
         if (copyExportBtn) {
             copyExportBtn.addEventListener('click', () => this.copyExportOutput());
+        }
+        // Load test framework toggles
+        const frameworkBtns = document.querySelectorAll('.framework-btn');
+        for (const btn of frameworkBtns) {
+            btn.addEventListener('click', () => {
+                for (const b of frameworkBtns)
+                    b.classList.remove('active');
+                btn.classList.add('active');
+                this.selectedFramework = btn.dataset.framework;
+            });
+        }
+        // Generate load test script
+        const genLoadTestBtn = document.getElementById('btn-generate-loadtest');
+        if (genLoadTestBtn) {
+            genLoadTestBtn.addEventListener('click', () => this.generateLoadTestScript());
+        }
+        // Copy load test output
+        const copyLoadTestBtn = document.getElementById('btn-copy-loadtest');
+        if (copyLoadTestBtn) {
+            copyLoadTestBtn.addEventListener('click', () => {
+                const code = document.getElementById('loadtest-code');
+                if (code) {
+                    navigator.clipboard.writeText(code.textContent || '').then(() => {
+                        this.showSuccess('Script copied to clipboard!');
+                    });
+                }
+            });
+        }
+        // Download load test script
+        const downloadLoadTestBtn = document.getElementById('btn-download-loadtest');
+        if (downloadLoadTestBtn) {
+            downloadLoadTestBtn.addEventListener('click', () => this.downloadLoadTestScript());
         }
         // Playback speed
         const speedSlider = document.getElementById('playback-speed');
@@ -278,6 +312,7 @@ class App {
             const config = this.controls.getConfig();
             this.services.config.saveLocal(config);
             const result = await this.services.simulation.run(config);
+            this.lastResult = result;
             // Show results, hide placeholder
             const placeholder = document.getElementById('sim-placeholder');
             const resultsContent = document.getElementById('sim-results-content');
@@ -647,6 +682,68 @@ class App {
         const config = this.controls.getConfig();
         const target = this.services.export.generate(config);
         this.showExportOutput(target.content, `${config.platform}-config`);
+    }
+    generateLoadTestScript() {
+        const config = this.controls.getConfig();
+        const targetUrl = document.getElementById('loadtest-target-url')?.value || 'https://api.example.com/endpoint';
+        const avgResponseTimeMs = parseFloat(document.getElementById('loadtest-avg-response')?.value || '100');
+        // Run validation
+        const validation = this.services.loadTestExport.validate(config, this.selectedFramework);
+        const warningsEl = document.getElementById('loadtest-warnings');
+        if (warningsEl) {
+            if (validation.warnings.length > 0) {
+                warningsEl.innerHTML = validation.warnings
+                    .map(w => `<div class="loadtest-warning-item">\u26A0 ${w}</div>`)
+                    .join('');
+                warningsEl.classList.remove('hidden');
+            }
+            else {
+                warningsEl.classList.add('hidden');
+            }
+        }
+        if (!validation.valid) {
+            this.showError('Cannot generate: ' + validation.errors.join('; '));
+            return;
+        }
+        const script = this.services.loadTestExport.generate(config, {
+            framework: this.selectedFramework,
+            targetUrl,
+            avgResponseTimeMs,
+        }, this.lastResult || undefined);
+        // Show output
+        const container = document.getElementById('loadtest-output');
+        const code = document.getElementById('loadtest-code');
+        const label = document.getElementById('loadtest-label');
+        const exporter = this.services.loadTestExport.getExporter(this.selectedFramework);
+        if (container)
+            container.classList.remove('hidden');
+        if (code)
+            code.textContent = script;
+        if (label)
+            label.textContent = `${exporter.name} script`;
+    }
+    downloadLoadTestScript() {
+        const code = document.getElementById('loadtest-code');
+        if (!code || !code.textContent)
+            return;
+        const exporter = this.services.loadTestExport.getExporter(this.selectedFramework);
+        const filenames = {
+            k6: 'scalings-loadtest.js',
+            gatling: 'ScalingsSimulation.java',
+            locust: 'scalings_loadtest.py',
+            jmeter: 'scalings-loadtest.jmx',
+            artillery: 'scalings-loadtest.yml',
+        };
+        const mimeTypes = {
+            k6: 'application/javascript',
+            gatling: 'text/x-java-source',
+            locust: 'text/x-python',
+            jmeter: 'application/xml',
+            artillery: 'text/yaml',
+        };
+        const filename = filenames[this.selectedFramework] || `scalings-loadtest.${exporter.extension}`;
+        const mimeType = mimeTypes[this.selectedFramework] || 'text/plain';
+        this.offerDownload(code.textContent, filename, mimeType);
     }
     copyExportOutput() {
         const output = document.getElementById('export-code');
