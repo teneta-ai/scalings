@@ -142,20 +142,35 @@ class App {
                 const raw = bodyTextarea.value.trim();
                 if (!raw)
                     return;
-                // Replace template vars with JSON-safe placeholders
+                // Strategy: replace each template var with a unique integer so the
+                // string becomes valid JSON.  After formatting, swap them back.
+                // We use large sentinel numbers (900001, 900002, …) unlikely to
+                // collide with real values.
                 let safe = raw;
-                const placeholders = [];
+                const restores = []; // [placeholder-in-output, original-text]
+                let sentinel = 900001;
                 for (const v of templateVars) {
-                    const ph = `"__SCALINGS_PH_${v.slice(1)}__"`;
-                    placeholders.push([ph, v]);
-                    safe = safe.split(v).join(ph);
+                    if (!safe.includes(v))
+                        continue;
+                    // Quoted form:  "$var"  →  "PLACEHOLDER_Q"  (stays a string after stringify)
+                    const qph = `__PH_Q_${sentinel}__`;
+                    if (safe.includes(`"${v}"`)) {
+                        safe = safe.split(`"${v}"`).join(`"${qph}"`);
+                        restores.push([`"${qph}"`, `"${v}"`]);
+                    }
+                    // Bare form:  $var  →  sentinel number  (stays a number after stringify)
+                    const bph = sentinel;
+                    if (safe.includes(v)) {
+                        safe = safe.split(v).join(String(bph));
+                        restores.push([String(bph), v]);
+                    }
+                    sentinel++;
                 }
                 try {
                     const parsed = JSON.parse(safe);
                     let formatted = JSON.stringify(parsed, null, 2);
-                    // Restore template vars from placeholders
-                    for (const [ph, v] of placeholders) {
-                        formatted = formatted.split(ph).join(v);
+                    for (const [ph, original] of restores) {
+                        formatted = formatted.split(ph).join(original);
                     }
                     bodyTextarea.value = formatted;
                 }
