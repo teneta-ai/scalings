@@ -5,7 +5,8 @@
   "description": "Autoscaling simulator for Kubernetes HPA, AWS ASG, and GCP MIG",
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test dist/tests/*.test.js"
+    "test": "tsc && node --test dist/tests/*.test.js",
+    "check:docs": "node scripts/check-llm-docs.js"
   },
   "keywords": ["autoscaling", "kubernetes", "hpa", "simulator", "capacity-planning"],
   "homepage": "https://scalings.xyz/",

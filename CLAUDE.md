@@ -54,9 +54,12 @@ const url = cfgSvc.toURL(config);     // #config=<base64> hash
 npm install        # install dependencies (first time)
 npm run build      # compile TypeScript
 npm test           # build + run all tests (node:test)
+npm run check:docs # verify LLM docs match source of truth
 ```
 
-Tests must pass before committing. Currently 163 tests across simulation, config, export, traffic, and chart formatting.
+Tests AND doc checks must pass before committing. CI runs both.
+
+**LLM doc sync rule**: Any change to parameters, defaults, traffic patterns, presets, or platforms in `src/interfaces/types.ts` MUST be reflected in `llms-full.txt` and `docs.md`. The `npm run check:docs` script validates this automatically — it extracts every field name from `DEFAULT_SERVICE`, `DEFAULT_CLIENT`, `DEFAULT_BROKER`, `DEFAULT_SIMULATION`, every traffic pattern from `TrafficPatternType`, every preset from `PRESET_SCENARIOS`, and every platform from `Platform`, then verifies each one appears in both doc files. CI will block merges if docs are stale.
 
 ## Architecture
 
@@ -112,7 +115,11 @@ src/
 7. **main.ts**: Add to `renderSummary()` if it has a summary stat
 8. **tests**: Add tests for simulation behavior, config round-trip, and edge cases
 9. **presets**: Update preset merging in `bindPresets()` if adding a new config section
-10. **llms.txt**: Update config example JSON, entity docs, and field descriptions
+10. **LLM docs** (MANDATORY — CI will fail if skipped): Update all three files when adding/changing parameters, traffic patterns, presets, or platforms:
+    - `llms-full.txt`: Add the new parameter to the Parameters Reference table, update JSON schema, update worked examples if relevant
+    - `docs.md`: Add the new parameter to the appropriate Parameters table, update YAML schema if relevant
+    - `llms.txt`: Update if adding a major new capability (new platform, new export type, etc.)
+    - Run `npm run check:docs` locally to verify — this same check runs in CI and will block the PR if docs are stale
 11. **README.md**: Update feature list, config entity descriptions, and preset table if changed
 
 ## Testing Conventions
