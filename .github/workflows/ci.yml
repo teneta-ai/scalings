@@ -31,3 +31,6 @@ jobs:
 
       - name: Test
         run: node --test dist/tests/*.test.js
+
+      - name: Check LLM docs are in sync
+        run: npm run check:docs
