@@ -1,0 +1,374 @@
+# scalings.xyz
+
+> scalings.xyz is an interactive, fully client-side autoscaling simulator. Engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy handles the load. AI agents can programmatically construct simulation URLs using the URL Hash API.
+
+## URL Hash API
+
+This is the primary integration point for LLMs and AI agents. Construct a URL to link users directly to a pre-configured, auto-running simulation.
+
+### URL Format
+
+```
+https://scalings.xyz/#config=<base64-encoded-json>&autorun=true
+```
+
+- `config`: Base64-encoded JSON object matching the SimulationConfig schema below
+- `autorun=true`: Optional. Automatically runs the simulation on page load.
+- Encoding: `btoa(JSON.stringify(config))` in JavaScript, or standard base64 of the JSON string.
+- Missing fields fall back to defaults, so you can send a partial config.
+
+### SimulationConfig JSON Schema
+
+```json
+{
+  "version": 2,
+  "name": "string",
+  "description": "string (optional)",
+  "platform": "kubernetes-hpa | aws-asg | gcp-mig | custom",
+  "simulation": {
+    "duration": "number (seconds, default: 600)",
+    "tick_interval": "number (seconds, default: 1)"
+  },
+  "producer": {
+    "traffic": {
+      "pattern": "steady | gradual | spike | wave | step | custom",
+      "params": "object (pattern-specific, see Traffic Patterns section)"
+    }
+  },
+  "client": {
+    "max_retries": "number (0-10, default: 0)",
+    "retry_delay": "number (seconds, default: 0)",
+    "retry_strategy": "fixed | exponential | exponential-jitter (default: fixed)"
+  },
+  "broker": {
+    "enabled": "boolean (default: false)",
+    "max_size": "number (default: 1000, 0 = unlimited)",
+    "request_timeout_ms": "number (default: 0, 0 = no timeout)"
+  },
+  "service": {
+    "min_replicas": "number (default: 1)",
+    "max_replicas": "number (default: 50)",
+    "scale_up_threshold": "number (0-100, default: 80)",
+    "scale_down_threshold": "number (0-100, default: 30)",
+    "capacity_per_replica": "number (default: 100)",
+    "startup_time": "number (seconds, default: 30)",
+    "scale_up_step": "number (default: 4)",
+    "scale_down_step": "number (default: 1)",
+    "metric_observation_delay": "number (seconds, default: 15)",
+    "cooldown_scale_up": "number (seconds, default: 15)",
+    "cooldown_scale_down": "number (seconds, default: 60)",
+    "node_provisioning_time": "number (seconds, default: 120, 0 = pre-provisioned)",
+    "cluster_node_capacity": "number (default: 20)",
+    "pods_per_node": "number (default: 10)",
+    "graceful_shutdown_time": "number (seconds, default: 30)",
+    "cost_per_replica_hour": "number (USD, default: 0.05)",
+    "saturation_threshold": "number (0-100, default: 0 = disabled)",
+    "max_capacity_reduction": "number (0-1, default: 0)",
+    "pod_failure_rate": "number (0-100, default: 0)",
+    "random_seed": "number (default: 0, 0 = non-deterministic)",
+    "failure_events": "[{time: number, count: number}] (default: [])"
+  }
+}
+```
+
+### Worked Example 1: Black Friday Spike
+
+A 10x traffic spike from 200 to 2000 RPS lasting 60 seconds, with aggressive scaling (10 pods min, 100 max, scale-up step of 10).
+
+**JSON Config:**
+
+```json
+{"version":2,"name":"Black Friday Spike","platform":"kubernetes-hpa","simulation":{"duration":600,"tick_interval":1},"producer":{"traffic":{"pattern":"spike","params":{"base_rps":200,"spike_rps":2000,"spike_start":120,"spike_duration":60}}},"client":{"max_retries":0,"retry_delay":0,"retry_strategy":"fixed"},"broker":{"enabled":false,"max_size":1000,"request_timeout_ms":0},"service":{"min_replicas":10,"max_replicas":100,"scale_up_threshold":50,"scale_down_threshold":30,"capacity_per_replica":40,"startup_time":30,"scale_up_step":10,"scale_down_step":1,"metric_observation_delay":5,"cooldown_scale_up":15,"cooldown_scale_down":60,"node_provisioning_time":120,"cluster_node_capacity":20,"pods_per_node":10,"graceful_shutdown_time":30,"cost_per_replica_hour":0.05,"saturation_threshold":0,"max_capacity_reduction":0,"pod_failure_rate":0,"random_seed":0,"failure_events":[]}}
+```
+
+**Base64:**
+
+```
+eyJ2ZXJzaW9uIjoyLCJuYW1lIjoiQmxhY2sgRnJpZGF5IFNwaWtlIiwicGxhdGZvcm0iOiJrdWJlcm5ldGVzLWhwYSIsInNpbXVsYXRpb24iOnsiZHVyYXRpb24iOjYwMCwidGlja19pbnRlcnZhbCI6MX0sInByb2R1Y2VyIjp7InRyYWZmaWMiOnsicGF0dGVybiI6InNwaWtlIiwicGFyYW1zIjp7ImJhc2VfcnBzIjoyMDAsInNwaWtlX3JwcyI6MjAwMCwic3Bpa2Vfc3RhcnQiOjEyMCwic3Bpa2VfZHVyYXRpb24iOjYwfX19LCJjbGllbnQiOnsibWF4X3JldHJpZXMiOjAsInJldHJ5X2RlbGF5IjowLCJyZXRyeV9zdHJhdGVneSI6ImZpeGVkIn0sImJyb2tlciI6eyJlbmFibGVkIjpmYWxzZSwibWF4X3NpemUiOjEwMDAsInJlcXVlc3RfdGltZW91dF9tcyI6MH0sInNlcnZpY2UiOnsibWluX3JlcGxpY2FzIjoxMCwibWF4X3JlcGxpY2FzIjoxMDAsInNjYWxlX3VwX3RocmVzaG9sZCI6NTAsInNjYWxlX2Rvd25fdGhyZXNob2xkIjozMCwiY2FwYWNpdHlfcGVyX3JlcGxpY2EiOjQwLCJzdGFydHVwX3RpbWUiOjMwLCJzY2FsZV91cF9zdGVwIjoxMCwic2NhbGVfZG93bl9zdGVwIjoxLCJtZXRyaWNfb2JzZXJ2YXRpb25fZGVsYXkiOjUsImNvb2xkb3duX3NjYWxlX3VwIjoxNSwiY29vbGRvd25fc2NhbGVfZG93biI6NjAsIm5vZGVfcHJvdmlzaW9uaW5nX3RpbWUiOjEyMCwiY2x1c3Rlcl9ub2RlX2NhcGFjaXR5IjoyMCwicG9kc19wZXJfbm9kZSI6MTAsImdyYWNlZnVsX3NodXRkb3duX3RpbWUiOjMwLCJjb3N0X3Blcl9yZXBsaWNhX2hvdXIiOjAuMDUsInNhdHVyYXRpb25fdGhyZXNob2xkIjowLCJtYXhfY2FwYWNpdHlfcmVkdWN0aW9uIjowLCJwb2RfZmFpbHVyZV9yYXRlIjowLCJyYW5kb21fc2VlZCI6MCwiZmFpbHVyZV9ldmVudHMiOltdfX0=
+```
+
+**Full URL:**
+
+```
+https://scalings.xyz/#config=eyJ2ZXJzaW9uIjoyLCJuYW1lIjoiQmxhY2sgRnJpZGF5IFNwaWtlIiwicGxhdGZvcm0iOiJrdWJlcm5ldGVzLWhwYSIsInNpbXVsYXRpb24iOnsiZHVyYXRpb24iOjYwMCwidGlja19pbnRlcnZhbCI6MX0sInByb2R1Y2VyIjp7InRyYWZmaWMiOnsicGF0dGVybiI6InNwaWtlIiwicGFyYW1zIjp7ImJhc2VfcnBzIjoyMDAsInNwaWtlX3JwcyI6MjAwMCwic3Bpa2Vfc3RhcnQiOjEyMCwic3Bpa2VfZHVyYXRpb24iOjYwfX19LCJjbGllbnQiOnsibWF4X3JldHJpZXMiOjAsInJldHJ5X2RlbGF5IjowLCJyZXRyeV9zdHJhdGVneSI6ImZpeGVkIn0sImJyb2tlciI6eyJlbmFibGVkIjpmYWxzZSwibWF4X3NpemUiOjEwMDAsInJlcXVlc3RfdGltZW91dF9tcyI6MH0sInNlcnZpY2UiOnsibWluX3JlcGxpY2FzIjoxMCwibWF4X3JlcGxpY2FzIjoxMDAsInNjYWxlX3VwX3RocmVzaG9sZCI6NTAsInNjYWxlX2Rvd25fdGhyZXNob2xkIjozMCwiY2FwYWNpdHlfcGVyX3JlcGxpY2EiOjQwLCJzdGFydHVwX3RpbWUiOjMwLCJzY2FsZV91cF9zdGVwIjoxMCwic2NhbGVfZG93bl9zdGVwIjoxLCJtZXRyaWNfb2JzZXJ2YXRpb25fZGVsYXkiOjUsImNvb2xkb3duX3NjYWxlX3VwIjoxNSwiY29vbGRvd25fc2NhbGVfZG93biI6NjAsIm5vZGVfcHJvdmlzaW9uaW5nX3RpbWUiOjEyMCwiY2x1c3Rlcl9ub2RlX2NhcGFjaXR5IjoyMCwicG9kc19wZXJfbm9kZSI6MTAsImdyYWNlZnVsX3NodXRkb3duX3RpbWUiOjMwLCJjb3N0X3Blcl9yZXBsaWNhX2hvdXIiOjAuMDUsInNhdHVyYXRpb25fdGhyZXNob2xkIjowLCJtYXhfY2FwYWNpdHlfcmVkdWN0aW9uIjowLCJwb2RfZmFpbHVyZV9yYXRlIjowLCJyYW5kb21fc2VlZCI6MCwiZmFpbHVyZV9ldmVudHMiOltdfX0=&autorun=true
+```
+
+### Worked Example 2: Gradual Daily Ramp
+
+Traffic linearly increases from 50 to 800 RPS over 600 seconds, simulating a typical workday ramp-up.
+
+**JSON Config:**
+
+```json
+{"version":2,"name":"Gradual Daily Ramp","platform":"kubernetes-hpa","simulation":{"duration":600,"tick_interval":1},"producer":{"traffic":{"pattern":"gradual","params":{"start_rps":50,"end_rps":800}}},"client":{"max_retries":0,"retry_delay":0,"retry_strategy":"fixed"},"broker":{"enabled":false,"max_size":1000,"request_timeout_ms":0},"service":{"min_replicas":2,"max_replicas":30,"scale_up_threshold":75,"scale_down_threshold":30,"capacity_per_replica":150,"startup_time":30,"scale_up_step":4,"scale_down_step":1,"metric_observation_delay":15,"cooldown_scale_up":15,"cooldown_scale_down":60,"node_provisioning_time":120,"cluster_node_capacity":20,"pods_per_node":10,"graceful_shutdown_time":30,"cost_per_replica_hour":0.05,"saturation_threshold":0,"max_capacity_reduction":0,"pod_failure_rate":0,"random_seed":0,"failure_events":[]}}
+```
+
+**Base64:**
+
+```
+eyJ2ZXJzaW9uIjoyLCJuYW1lIjoiR3JhZHVhbCBEYWlseSBSYW1wIiwicGxhdGZvcm0iOiJrdWJlcm5ldGVzLWhwYSIsInNpbXVsYXRpb24iOnsiZHVyYXRpb24iOjYwMCwidGlja19pbnRlcnZhbCI6MX0sInByb2R1Y2VyIjp7InRyYWZmaWMiOnsicGF0dGVybiI6ImdyYWR1YWwiLCJwYXJhbXMiOnsic3RhcnRfcnBzIjo1MCwiZW5kX3JwcyI6ODAwfX19LCJjbGllbnQiOnsibWF4X3JldHJpZXMiOjAsInJldHJ5X2RlbGF5IjowLCJyZXRyeV9zdHJhdGVneSI6ImZpeGVkIn0sImJyb2tlciI6eyJlbmFibGVkIjpmYWxzZSwibWF4X3NpemUiOjEwMDAsInJlcXVlc3RfdGltZW91dF9tcyI6MH0sInNlcnZpY2UiOnsibWluX3JlcGxpY2FzIjoyLCJtYXhfcmVwbGljYXMiOjMwLCJzY2FsZV91cF90aHJlc2hvbGQiOjc1LCJzY2FsZV9kb3duX3RocmVzaG9sZCI6MzAsImNhcGFjaXR5X3Blcl9yZXBsaWNhIjoxNTAsInN0YXJ0dXBfdGltZSI6MzAsInNjYWxlX3VwX3N0ZXAiOjQsInNjYWxlX2Rvd25fc3RlcCI6MSwibWV0cmljX29ic2VydmF0aW9uX2RlbGF5IjoxNSwiY29vbGRvd25fc2NhbGVfdXAiOjE1LCJjb29sZG93bl9zY2FsZV9kb3duIjo2MCwibm9kZV9wcm92aXNpb25pbmdfdGltZSI6MTIwLCJjbHVzdGVyX25vZGVfY2FwYWNpdHkiOjIwLCJwb2RzX3Blcl9ub2RlIjoxMCwiZ3JhY2VmdWxfc2h1dGRvd25fdGltZSI6MzAsImNvc3RfcGVyX3JlcGxpY2FfaG91ciI6MC4wNSwic2F0dXJhdGlvbl90aHJlc2hvbGQiOjAsIm1heF9jYXBhY2l0eV9yZWR1Y3Rpb24iOjAsInBvZF9mYWlsdXJlX3JhdGUiOjAsInJhbmRvbV9zZWVkIjowLCJmYWlsdXJlX2V2ZW50cyI6W119fQ==
+```
+
+**Full URL:**
+
+```
+https://scalings.xyz/#config=eyJ2ZXJzaW9uIjoyLCJuYW1lIjoiR3JhZHVhbCBEYWlseSBSYW1wIiwicGxhdGZvcm0iOiJrdWJlcm5ldGVzLWhwYSIsInNpbXVsYXRpb24iOnsiZHVyYXRpb24iOjYwMCwidGlja19pbnRlcnZhbCI6MX0sInByb2R1Y2VyIjp7InRyYWZmaWMiOnsicGF0dGVybiI6ImdyYWR1YWwiLCJwYXJhbXMiOnsic3RhcnRfcnBzIjo1MCwiZW5kX3JwcyI6ODAwfX19LCJjbGllbnQiOnsibWF4X3JldHJpZXMiOjAsInJldHJ5X2RlbGF5IjowLCJyZXRyeV9zdHJhdGVneSI6ImZpeGVkIn0sImJyb2tlciI6eyJlbmFibGVkIjpmYWxzZSwibWF4X3NpemUiOjEwMDAsInJlcXVlc3RfdGltZW91dF9tcyI6MH0sInNlcnZpY2UiOnsibWluX3JlcGxpY2FzIjoyLCJtYXhfcmVwbGljYXMiOjMwLCJzY2FsZV91cF90aHJlc2hvbGQiOjc1LCJzY2FsZV9kb3duX3RocmVzaG9sZCI6MzAsImNhcGFjaXR5X3Blcl9yZXBsaWNhIjoxNTAsInN0YXJ0dXBfdGltZSI6MzAsInNjYWxlX3VwX3N0ZXAiOjQsInNjYWxlX2Rvd25fc3RlcCI6MSwibWV0cmljX29ic2VydmF0aW9uX2RlbGF5IjoxNSwiY29vbGRvd25fc2NhbGVfdXAiOjE1LCJjb29sZG93bl9zY2FsZV9kb3duIjo2MCwibm9kZV9wcm92aXNpb25pbmdfdGltZSI6MTIwLCJjbHVzdGVyX25vZGVfY2FwYWNpdHkiOjIwLCJwb2RzX3Blcl9ub2RlIjoxMCwiZ3JhY2VmdWxfc2h1dGRvd25fdGltZSI6MzAsImNvc3RfcGVyX3JlcGxpY2FfaG91ciI6MC4wNSwic2F0dXJhdGlvbl90aHJlc2hvbGQiOjAsIm1heF9jYXBhY2l0eV9yZWR1Y3Rpb24iOjAsInBvZF9mYWlsdXJlX3JhdGUiOjAsInJhbmRvbV9zZWVkIjowLCJmYWlsdXJlX2V2ZW50cyI6W119fQ==&autorun=true
+```
+
+### Worked Example 3: Sinusoidal Wave
+
+Oscillating traffic between 200 and 800 RPS with a 120-second period, testing how the autoscaler tracks cyclical load.
+
+**JSON Config:**
+
+```json
+{"version":2,"name":"Sinusoidal Wave Traffic","platform":"kubernetes-hpa","simulation":{"duration":600,"tick_interval":1},"producer":{"traffic":{"pattern":"wave","params":{"base_rps":500,"amplitude":300,"period":120}}},"client":{"max_retries":0,"retry_delay":0,"retry_strategy":"fixed"},"broker":{"enabled":false,"max_size":1000,"request_timeout_ms":0},"service":{"min_replicas":3,"max_replicas":40,"scale_up_threshold":70,"scale_down_threshold":30,"capacity_per_replica":100,"startup_time":30,"scale_up_step":4,"scale_down_step":1,"metric_observation_delay":15,"cooldown_scale_up":15,"cooldown_scale_down":60,"node_provisioning_time":120,"cluster_node_capacity":20,"pods_per_node":10,"graceful_shutdown_time":30,"cost_per_replica_hour":0.05,"saturation_threshold":0,"max_capacity_reduction":0,"pod_failure_rate":0,"random_seed":0,"failure_events":[]}}
+```
+
+**Base64:**
+
+```
+eyJ2ZXJzaW9uIjoyLCJuYW1lIjoiU2ludXNvaWRhbCBXYXZlIFRyYWZmaWMiLCJwbGF0Zm9ybSI6Imt1YmVybmV0ZXMtaHBhIiwic2ltdWxhdGlvbiI6eyJkdXJhdGlvbiI6NjAwLCJ0aWNrX2ludGVydmFsIjoxfSwicHJvZHVjZXIiOnsidHJhZmZpYyI6eyJwYXR0ZXJuIjoid2F2ZSIsInBhcmFtcyI6eyJiYXNlX3JwcyI6NTAwLCJhbXBsaXR1ZGUiOjMwMCwicGVyaW9kIjoxMjB9fX0sImNsaWVudCI6eyJtYXhfcmV0cmllcyI6MCwicmV0cnlfZGVsYXkiOjAsInJldHJ5X3N0cmF0ZWd5IjoiZml4ZWQifSwiYnJva2VyIjp7ImVuYWJsZWQiOmZhbHNlLCJtYXhfc2l6ZSI6MTAwMCwicmVxdWVzdF90aW1lb3V0X21zIjowfSwic2VydmljZSI6eyJtaW5fcmVwbGljYXMiOjMsIm1heF9yZXBsaWNhcyI6NDAsInNjYWxlX3VwX3RocmVzaG9sZCI6NzAsInNjYWxlX2Rvd25fdGhyZXNob2xkIjozMCwiY2FwYWNpdHlfcGVyX3JlcGxpY2EiOjEwMCwic3RhcnR1cF90aW1lIjozMCwic2NhbGVfdXBfc3RlcCI6NCwic2NhbGVfZG93bl9zdGVwIjoxLCJtZXRyaWNfb2JzZXJ2YXRpb25fZGVsYXkiOjE1LCJjb29sZG93bl9zY2FsZV91cCI6MTUsImNvb2xkb3duX3NjYWxlX2Rvd24iOjYwLCJub2RlX3Byb3Zpc2lvbmluZ190aW1lIjoxMjAsImNsdXN0ZXJfbm9kZV9jYXBhY2l0eSI6MjAsInBvZHNfcGVyX25vZGUiOjEwLCJncmFjZWZ1bF9zaHV0ZG93bl90aW1lIjozMCwiY29zdF9wZXJfcmVwbGljYV9ob3VyIjowLjA1LCJzYXR1cmF0aW9uX3RocmVzaG9sZCI6MCwibWF4X2NhcGFjaXR5X3JlZHVjdGlvbiI6MCwicG9kX2ZhaWx1cmVfcmF0ZSI6MCwicmFuZG9tX3NlZWQiOjAsImZhaWx1cmVfZXZlbnRzIjpbXX19
+```
+
+**Full URL:**
+
+```
+https://scalings.xyz/#config=eyJ2ZXJzaW9uIjoyLCJuYW1lIjoiU2ludXNvaWRhbCBXYXZlIFRyYWZmaWMiLCJwbGF0Zm9ybSI6Imt1YmVybmV0ZXMtaHBhIiwic2ltdWxhdGlvbiI6eyJkdXJhdGlvbiI6NjAwLCJ0aWNrX2ludGVydmFsIjoxfSwicHJvZHVjZXIiOnsidHJhZmZpYyI6eyJwYXR0ZXJuIjoid2F2ZSIsInBhcmFtcyI6eyJiYXNlX3JwcyI6NTAwLCJhbXBsaXR1ZGUiOjMwMCwicGVyaW9kIjoxMjB9fX0sImNsaWVudCI6eyJtYXhfcmV0cmllcyI6MCwicmV0cnlfZGVsYXkiOjAsInJldHJ5X3N0cmF0ZWd5IjoiZml4ZWQifSwiYnJva2VyIjp7ImVuYWJsZWQiOmZhbHNlLCJtYXhfc2l6ZSI6MTAwMCwicmVxdWVzdF90aW1lb3V0X21zIjowfSwic2VydmljZSI6eyJtaW5fcmVwbGljYXMiOjMsIm1heF9yZXBsaWNhcyI6NDAsInNjYWxlX3VwX3RocmVzaG9sZCI6NzAsInNjYWxlX2Rvd25fdGhyZXNob2xkIjozMCwiY2FwYWNpdHlfcGVyX3JlcGxpY2EiOjEwMCwic3RhcnR1cF90aW1lIjozMCwic2NhbGVfdXBfc3RlcCI6NCwic2NhbGVfZG93bl9zdGVwIjoxLCJtZXRyaWNfb2JzZXJ2YXRpb25fZGVsYXkiOjE1LCJjb29sZG93bl9zY2FsZV91cCI6MTUsImNvb2xkb3duX3NjYWxlX2Rvd24iOjYwLCJub2RlX3Byb3Zpc2lvbmluZ190aW1lIjoxMjAsImNsdXN0ZXJfbm9kZV9jYXBhY2l0eSI6MjAsInBvZHNfcGVyX25vZGUiOjEwLCJncmFjZWZ1bF9zaHV0ZG93bl90aW1lIjozMCwiY29zdF9wZXJfcmVwbGljYV9ob3VyIjowLjA1LCJzYXR1cmF0aW9uX3RocmVzaG9sZCI6MCwibWF4X2NhcGFjaXR5X3JlZHVjdGlvbiI6MCwicG9kX2ZhaWx1cmVfcmF0ZSI6MCwicmFuZG9tX3NlZWQiOjAsImZhaWx1cmVfZXZlbnRzIjpbXX19&autorun=true
+```
+
+## Supported Platforms
+
+- **Kubernetes HPA** (`kubernetes-hpa`) — Horizontal Pod Autoscaler. The most common autoscaler for containerized workloads. Exports to K8s HPA YAML manifests.
+- **AWS ASG** (`aws-asg`) — Auto Scaling Group. AWS-native instance scaling. Exports to CloudFormation templates.
+- **GCP MIG** (`gcp-mig`) — Managed Instance Group. GCP-native VM scaling. Exports to Terraform HCL.
+- **Custom / Generic** (`custom`) — Any autoscaler. Platform-agnostic simulation with generic YAML export.
+
+## Parameters Reference
+
+### Service Parameters — Basic Scaling
+
+| Parameter | Description | Type | Default | Valid Range |
+|-----------|-------------|------|---------|-------------|
+| `min_replicas` | Floor for scale-down. The autoscaler will never scale below this count. | integer | 1 | >= 1 |
+| `max_replicas` | Ceiling for scale-up. The autoscaler will never scale above this count. | integer | 50 | >= min_replicas |
+| `scale_up_threshold` | Utilization percentage that triggers a scale-up event. When fleet utilization exceeds this value, the autoscaler adds pods. | number | 80 | 0-100 |
+| `scale_down_threshold` | Utilization percentage that triggers a scale-down event. When fleet utilization drops below this value, the autoscaler removes pods. | number | 30 | 0-100 |
+| `capacity_per_replica` | Maximum requests per second a single pod/instance can handle at 100% utilization. | number | 100 | > 0 |
+| `startup_time` | Seconds for a new pod/instance to become ready and start serving traffic after being scheduled. | number | 30 | >= 0 |
+| `scale_up_step` | Number of pods/instances to add per scale-up event. | integer | 4 | >= 1 |
+| `scale_down_step` | Number of pods/instances to remove per scale-down event. | integer | 1 | >= 1 |
+
+### Service Parameters — Advanced
+
+| Parameter | Description | Type | Default | Valid Range |
+|-----------|-------------|------|---------|-------------|
+| `metric_observation_delay` | Seconds of lag before the autoscaler detects utilization changes. Models the real-world delay in metrics pipelines (Prometheus scrape interval, CloudWatch period, etc.). | number | 15 | >= 0 |
+| `cooldown_scale_up` | Minimum seconds between consecutive scale-up events. Prevents thrashing during rapid traffic changes. | number | 15 | >= 0 |
+| `cooldown_scale_down` | Minimum seconds between consecutive scale-down events. Prevents premature scale-down after a spike subsides. | number | 60 | >= 0 |
+| `node_provisioning_time` | Seconds to provision a new cluster node when all existing nodes are full. Set to 0 if nodes are pre-provisioned (e.g., Karpenter, warm pool). | number | 120 | >= 0 |
+| `cluster_node_capacity` | Maximum number of nodes in the cluster. Limits total pod capacity to `cluster_node_capacity * pods_per_node`. | integer | 20 | >= 1 |
+| `pods_per_node` | Maximum pods that fit on a single node. Along with `cluster_node_capacity`, determines the hard ceiling for fleet size. | integer | 10 | >= 1 |
+| `graceful_shutdown_time` | Seconds a terminating pod continues serving in-flight requests before fully shutting down. | number | 30 | >= 0 |
+| `cost_per_replica_hour` | USD cost per pod-hour. Used for cost estimation in simulation results. | number | 0.05 | >= 0 |
+
+### Service Parameters — Saturation
+
+| Parameter | Description | Type | Default | Valid Range |
+|-----------|-------------|------|---------|-------------|
+| `saturation_threshold` | Utilization percentage at which pod capacity starts degrading. Models CPU throttling, GC pressure, connection pool exhaustion. Set to 0 to disable saturation modeling. | number | 0 | 0-100 |
+| `max_capacity_reduction` | Maximum fraction of capacity lost when a pod is fully saturated (0-1). For example, 0.4 means a pod at 100% utilization loses 40% of its nominal capacity, creating a feedback loop. | number | 0 | 0-1 |
+
+### Service Parameters — Chaos Engineering
+
+| Parameter | Description | Type | Default | Valid Range |
+|-----------|-------------|------|---------|-------------|
+| `pod_failure_rate` | Percentage probability (0-100) that any running pod randomly fails on each simulation tick. Models background infrastructure instability. | number | 0 | 0-100 |
+| `random_seed` | Seed for the pseudo-random number generator. Set to 0 for non-deterministic behavior. Use a fixed positive integer for reproducible chaos across runs. | integer | 0 | >= 0 |
+| `failure_events` | Array of scheduled pod kills. Each entry has `time` (seconds into simulation) and `count` (number of running pods to kill at that time). Models planned disruptions like node drains or AZ failures. | array | [] | — |
+
+### Client Parameters
+
+| Parameter | Description | Type | Default | Valid Range |
+|-----------|-------------|------|---------|-------------|
+| `max_retries` | Maximum retry attempts per failed request. 0 means no retries. Higher values model retry storms that amplify overload. | integer | 0 | 0-10 |
+| `retry_delay` | Seconds to wait between a failure and the retry attempt. 0 means retry on the very next tick. Higher values spread retries over time, reducing amplification. | number | 0 | >= 0 |
+| `retry_strategy` | Retry backoff strategy. `fixed` uses constant delay, `exponential` doubles the delay each attempt, `exponential-jitter` adds randomness to exponential backoff. | string | "fixed" | fixed, exponential, exponential-jitter |
+
+### Broker Parameters
+
+| Parameter | Description | Type | Default | Valid Range |
+|-----------|-------------|------|---------|-------------|
+| `enabled` | Toggle the message broker on/off. When off, excess requests beyond fleet capacity are dropped immediately (OLTP mode). When on, excess requests are queued. | boolean | false | — |
+| `max_size` | Maximum number of requests the broker can hold. 0 means unlimited queue depth. When the queue is full, new excess requests are dropped. | integer | 1000 | >= 0 |
+| `request_timeout_ms` | Maximum milliseconds a request waits in the queue before expiring. 0 means no timeout (requests wait indefinitely). Expired requests count as dropped. | integer | 0 | >= 0 |
+
+### Simulation Parameters
+
+| Parameter | Description | Type | Default | Valid Range |
+|-----------|-------------|------|---------|-------------|
+| `duration` | Total simulation length in seconds. | number | 600 | > 0 |
+| `tick_interval` | Seconds per simulation tick. Each tick processes traffic generation, scaling decisions, overflow resolution, and state updates. | number | 1 | > 0 |
+
+## Traffic Patterns
+
+### Steady
+
+Constant RPS throughout the simulation.
+
+- **Pattern key**: `steady`
+- **Parameters**: `rps` (number) — requests per second
+
+```json
+"traffic": { "pattern": "steady", "params": { "rps": 500 } }
+```
+
+### Gradual Ramp
+
+Linear ramp from start RPS to end RPS over the simulation duration.
+
+- **Pattern key**: `gradual`
+- **Parameters**: `start_rps` (number), `end_rps` (number)
+
+```json
+"traffic": { "pattern": "gradual", "params": { "start_rps": 50, "end_rps": 800 } }
+```
+
+### Spike
+
+Base RPS with a sudden jump to spike RPS at a specified time for a specified duration.
+
+- **Pattern key**: `spike`
+- **Parameters**: `base_rps` (number), `spike_rps` (number), `spike_start` (seconds), `spike_duration` (seconds)
+
+```json
+"traffic": { "pattern": "spike", "params": { "base_rps": 200, "spike_rps": 2000, "spike_start": 120, "spike_duration": 60 } }
+```
+
+### Wave
+
+Sinusoidal oscillation around a base RPS. Formula: `base_rps + amplitude * sin(2 * pi * t / period)`.
+
+- **Pattern key**: `wave`
+- **Parameters**: `base_rps` (number), `amplitude` (number), `period` (seconds)
+
+```json
+"traffic": { "pattern": "wave", "params": { "base_rps": 500, "amplitude": 300, "period": 120 } }
+```
+
+### Step Function
+
+Discrete steps that hold at each RPS level for a specified duration. After the final step completes, the last RPS value is held for the remainder of the simulation.
+
+- **Pattern key**: `step`
+- **Parameters**: `steps` — array of `{rps, duration}` objects
+
+```json
+"traffic": { "pattern": "step", "params": { "steps": [{"rps": 100, "duration": 120}, {"rps": 300, "duration": 120}, {"rps": 600, "duration": 120}, {"rps": 1000, "duration": 120}, {"rps": 500, "duration": 120}] } }
+```
+
+### Custom
+
+User-defined time series with linear interpolation between data points.
+
+- **Pattern key**: `custom`
+- **Parameters**: `series` — array of `{t, rps}` objects where `t` is seconds into the simulation
+
+```json
+"traffic": { "pattern": "custom", "params": { "series": [{"t": 0, "rps": 100}, {"t": 60, "rps": 500}, {"t": 120, "rps": 200}, {"t": 300, "rps": 1000}, {"t": 600, "rps": 300}] } }
+```
+
+## YAML Config Schema
+
+The YAML format is used for source config export/import. It has the same fields as the JSON schema but uses a flat structure for service parameters.
+
+```yaml
+# scalings.xyz simulator config v2
+version: 2
+name: "My Simulation"
+platform: kubernetes-hpa
+
+simulation:
+  duration: 600
+  tick_interval: 1
+
+producer:
+  traffic:
+    pattern: spike
+    params:
+      base_rps: 200
+      spike_rps: 2000
+      spike_start: 120
+      spike_duration: 60
+
+client:
+  max_retries: 0
+  retry_delay: 0
+  retry_strategy: fixed
+
+broker:
+  enabled: false
+  max_size: 1000
+  request_timeout_ms: 0
+
+service:
+  min_replicas: 1
+  max_replicas: 50
+  scale_up_threshold: 80
+  scale_down_threshold: 30
+  capacity_per_replica: 100
+  startup_time: 30
+  scale_up_step: 4
+  scale_down_step: 1
+  metric_observation_delay: 15
+  cooldown_scale_up: 15
+  cooldown_scale_down: 60
+  node_provisioning_time: 120
+  cluster_node_capacity: 20
+  pods_per_node: 10
+  graceful_shutdown_time: 30
+  cost_per_replica_hour: 0.05
+  saturation_threshold: 0
+  max_capacity_reduction: 0
+  pod_failure_rate: 0
+  random_seed: 0
+  failure_events: []
+```
+
+## Built-in Presets
+
+| Preset | Description |
+|--------|-------------|
+| **Black Friday Spike** | 10x traffic spike (200 to 2000 RPS) lasting 60s with aggressive scaling — min: 10, max: 100, scale-up step: 10, threshold: 50%, capacity: 40 RPS/pod, metric delay: 5s |
+| **Gradual Daily Ramp** | Traffic linearly increases from 50 to 800 RPS over 600s — min: 2, max: 30, capacity: 150 RPS/pod, threshold: 75% |
+| **Noisy Neighbor** | Wave traffic (300 +/- 200 RPS, period 120s) with 0.5% random pod failures — min: 3, max: 40, threshold: 65%, startup: 45s |
+| **Step Migration** | Traffic in discrete steps (100, 300, 600, 1000, 500 RPS at 120s each) — min: 2, max: 80, scale-up step: 2, scale-down step: 1 |
+| **Bottomless Queue** | Spike traffic (200 to 2000 RPS) with an unlimited broker (max_size: 0) — no requests dropped, backlog drains as capacity catches up |
+| **Death Spiral (OLTP)** | Pod saturation (85% threshold, 40% capacity reduction) + client retries (3 max, 2s delay, fixed) cause cascading failure without a broker — excess dropped immediately, retries amplify overload |
+| **Death Spiral (Queued)** | Same as OLTP Death Spiral but with a bounded broker (5000 max, 10s timeout) — queue fills up, requests expire, retries amplify the overload into cascading failure |
+
+## Export Types
+
+### Source Config Export
+
+Saves and shares the full simulation scenario as YAML. Use for version control, sharing with teammates, or importing back into the simulator.
+
+### Target Config Export
+
+Generates a deployable autoscaling manifest for your platform:
+
+- **Kubernetes HPA YAML** — HPA manifest (autoscaling/v2) with minReplicas, maxReplicas, scale-up/down behavior policies, CPU utilization metrics, and cooldown periods.
+- **AWS CloudFormation** — ASG with min/max size, launch template, scaling policies (TargetTrackingScaling and StepScaling), and CloudWatch alarms.
+- **GCP Terraform** — google_compute_autoscaler with utilization targets, google_compute_instance_group_manager, and google_compute_health_check.
+
+### Load Test Export
+
+Generates a ready-to-run load test script that reproduces your simulated traffic pattern against a real endpoint. Supported frameworks:
+
+- **k6** (`.js`) — Grafana k6. Uses `constant-arrival-rate` / `ramping-arrival-rate` executors. VU pools sized from average response time.
+- **Gatling** (`.java`) — JVM-based. Generates a Java simulation class with `constantUsersPerSec` / `rampUsersPerSec` injection profiles.
+- **Locust** (`.py`) — Python-based. Generates a `HttpUser` class with optional `LoadTestShape` for non-steady patterns.
+- **JMeter** (`.jmx`) — Apache JMeter XML. Standard ThreadGroup for steady, Ultimate Thread Group plugin for dynamic patterns.
+- **Artillery** (`.yml`) — Node.js YAML config with `arrivalRate` / `rampTo` phases.
+
+All generated scripts include the scalings.xyz share URL as a comment. Configure target URL, HTTP method, headers, request body, and average response time before generating. Template variables (`$randInt`, `$randString`, `$uuid`, `$timestamp`, `$randFloat`, `$randomEmail`) are translated to each framework's native random-data idioms.

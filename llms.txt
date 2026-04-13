@@ -1,136 +1,19 @@
 # scalings.xyz
-> An interactive autoscaling simulator for Kubernetes HPA, AWS ASG, and GCP MIG.
 
-## What this tool does
-Lets engineers configure autoscaling parameters, pick a traffic pattern, and run
-a time-series simulation to see if their scaling policy handles the load.
+> scalings.xyz is an interactive, fully client-side autoscaling simulator. Engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy handles the load. AI agents can programmatically construct simulation URLs using the URL Hash API.
 
-Supported platforms:
-- Kubernetes Horizontal Pod Autoscaler (HPA)
-- AWS Auto Scaling Group (ASG)
-- GCP Managed Instance Group (MIG)
-- Custom / Generic autoscaler
+Key facts:
+- Fully client-side — no backend, no API calls, no auth
+- Supports Kubernetes HPA, AWS ASG, GCP MIG, and custom/generic autoscalers
+- URL Hash API: encode a JSON config as base64, link to `scalings.xyz/#config=<base64>&autorun=true` — simulation runs on page load
+- Exports deployment manifests (K8s HPA YAML, AWS CloudFormation, GCP Terraform) and load test scripts (k6, Gatling, Locust, JMeter, Artillery)
+- Built-in presets: Black Friday Spike, Gradual Daily Ramp, Noisy Neighbor, Step Migration, Bottomless Queue, Death Spiral (OLTP), Death Spiral (Queued)
 
-## How to use programmatically
-Construct a URL: scalings.xyz/#config=<base64-encoded-json>
-Add &autorun=true to auto-run the simulation on load.
+## Docs
 
-The config parameter is a base64-encoded JSON object matching the SimulationConfig schema:
-```json
-{
-  "version": 2,
-  "name": "My Simulation",
-  "platform": "kubernetes-hpa",
-  "simulation": { "duration": 600, "tick_interval": 1 },
-  "producer": {
-    "traffic": {
-      "pattern": "spike",
-      "params": { "base_rps": 200, "spike_rps": 2000, "spike_start": 120, "spike_duration": 60 }
-    }
-  },
-  "client": {
-    "max_retries": 0,
-    "retry_delay": 0
-  },
-  "broker": {
-    "enabled": false,
-    "max_size": 1000,
-    "request_timeout_ms": 0
-  },
-  "service": {
-    "min_replicas": 2, "max_replicas": 50,
-    "scale_up_threshold": 70, "scale_down_threshold": 30,
-    "capacity_per_replica": 100, "startup_time": 30,
-    "scale_up_step": 4, "scale_down_step": 1,
-    "metric_observation_delay": 15, "cooldown_scale_up": 15,
-    "cooldown_scale_down": 60, "node_provisioning_time": 120,
-    "cluster_node_capacity": 20, "pods_per_node": 10,
-    "graceful_shutdown_time": 30, "cost_per_replica_hour": 0.05,
-    "saturation_threshold": 0, "max_capacity_reduction": 0,
-    "pod_failure_rate": 0, "random_seed": 0,
-    "failure_events": []
-  }
-}
-```
+- [Full documentation](https://scalings.xyz/docs.md): Complete parameter reference, config schema, traffic patterns, URL Hash API with worked examples, and export types
+- [Full LLM context](https://scalings.xyz/llms-full.txt): Single-file version with all documentation content inlined
 
-## Config entities
+## Optional
 
-The config is organized around four entities:
-
-### Producer
-Generates traffic.
-- `traffic.pattern`: One of steady, gradual, spike, wave, step, custom.
-- `traffic.params`: Pattern-specific parameters (see below).
-
-### Client
-Client-side resilience behavior (reactive to failures).
-- `max_retries` (0-10): Maximum retry attempts per failed request. 0 = no retries. Models retry storms.
-- `retry_delay` (seconds): Wait time between failure and retry. 0 = retry on next tick. Higher values spread retries over time.
-
-### Broker (optional)
-A message queue between producer and service (like SQS, Kafka, or a buffering load balancer).
-- `enabled`: Toggle broker on/off. When off, excess requests are dropped immediately.
-- `max_size`: Max queued requests (0 = unlimited).
-- `request_timeout_ms`: Max wait time before a queued request expires (0 = no timeout).
-
-### Service
-The pod fleet with scaling, saturation degradation, and chaos engineering.
-- Basic scaling: `min_replicas`, `max_replicas`, `scale_up_threshold`, `scale_down_threshold`, `capacity_per_replica`, `startup_time`, `scale_up_step`, `scale_down_step`
-- Advanced: `metric_observation_delay`, `cooldown_scale_up`, `cooldown_scale_down`, `node_provisioning_time`, `cluster_node_capacity`, `pods_per_node`, `graceful_shutdown_time`, `cost_per_replica_hour`
-- Saturation: `saturation_threshold` (utilization % where capacity starts degrading, 0 = disabled), `max_capacity_reduction` (0-1 max capacity loss)
-- Chaos: `pod_failure_rate` (0-100%), `random_seed`, `failure_events` [{time, count}]
-
-## Traffic patterns available
-- steady: Constant RPS (params: rps)
-- gradual: Linear ramp (params: start_rps, end_rps)
-- spike: Sudden jump (params: base_rps, spike_rps, spike_start, spike_duration)
-- wave: Sinusoidal oscillation (params: base_rps, amplitude, period)
-- step: Discrete steps (params: steps[{rps, duration}])
-- custom: User-defined time series (params: series[{t, rps}])
-
-## Built-in presets
-- Black Friday Spike — 10x traffic spike with aggressive scaling
-- Gradual Daily Ramp — workday traffic pattern
-- Noisy Neighbor — wave traffic + random pod failures
-- Step Migration — phased rollout with discrete traffic steps
-- Bottomless Queue — unlimited broker, no drops
-- Death Spiral (OLTP) — pod saturation + retries cause cascading failure, no broker
-- Death Spiral (Queued) — same with a bounded broker, queue fills and requests expire
-
-## Who should use this
-DevOps engineers, SREs, platform teams, anyone tuning autoscaling policies.
-Useful for capacity planning, incident post-mortems, and scaling policy validation.
-
-## Chart & visualization
-Both the main simulation chart and the traffic preview chart show interactive
-tooltips on hover:
-- **Time** displayed as M:SS in the tooltip title
-- **Values** formatted per dataset type: comma-separated RPS for traffic/capacity/dropped,
-  integer count for pods, ms/s for wait times
-- Traffic preview x-axis shows time (M:SS), y-axis labeled "RPS"
-
-Chart datasets use descriptive labels (`Traffic (RPS)`, `Capacity (RPS)`,
-`Running Pods`, `Queue Depth`, etc.) for machine-readability.
-
-## Export capabilities
-1. Source Config Export: Save/share simulation setup as YAML
-2. Target Config Export: Generate deployable manifests (K8s HPA YAML, AWS CloudFormation, GCP Terraform)
-3. Run Export: Save multi-run comparison data as JSON for sharing or later analysis
-4. Load Test Export: Generate ready-to-run load test scripts that reproduce the simulated
-   traffic pattern against a real endpoint. Supported frameworks:
-   - **k6** (Grafana) — JavaScript. Uses `constant-arrival-rate` / `ramping-arrival-rate` executors.
-     VU pools sized from avg response time. Output: `.js` file.
-   - **Gatling** — Java simulation class with `constantUsersPerSec` / `rampUsersPerSec` injection profiles.
-     Output: `.java` file.
-   - **Locust** — Python `HttpUser` with optional `LoadTestShape` for non-steady patterns.
-     Output: `.py` file.
-   - **JMeter** — JMX format. Standard ThreadGroup for steady, Ultimate Thread Group plugin for
-     dynamic patterns (spike, wave, step, custom). Output: `.jmx` file.
-   - **Artillery** — Node.js YAML config with `arrivalRate` / `rampTo` phases.
-     Output: `.yml` file.
-
-   All generated scripts include a comment with the scalings.xyz share URL so recipients can
-   trace back to the original simulation. Configure target URL, HTTP method, headers, request
-   body, and average response time before generating. Template variables (`$randInt`,
-   `$randString`, `$uuid`, `$timestamp`, `$randFloat`, `$randomEmail`) are translated to
-   each framework's native random-data idioms.
+- [GitHub repository](https://github.com/Agitolyev/scalings): Source code and issue tracker

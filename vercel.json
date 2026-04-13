@@ -3,6 +3,8 @@
   "outputDirectory": ".",
   "routes": [
     { "src": "/llms.txt", "dest": "/llms.txt" },
+    { "src": "/llms-full.txt", "dest": "/llms-full.txt" },
+    { "src": "/docs.md", "dest": "/docs.md" },
     { "src": "/robots.txt", "dest": "/robots.txt" },
     { "src": "/sitemap.xml", "dest": "/sitemap.xml" }
   ],
@@ -10,6 +12,14 @@
     {
       "source": "/llms.txt",
       "headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+    },
+    {
+      "source": "/llms-full.txt",
+      "headers": [{ "key": "Content-Type", "value": "text/plain; charset=utf-8" }]
+    },
+    {
+      "source": "/docs.md",
+      "headers": [{ "key": "Content-Type", "value": "text/markdown; charset=utf-8" }]
     },
     {
       "source": "/assets/(.*)",
