@@ -30,6 +30,14 @@ export class LocalTrafficPatternService implements TrafficPatternService {
 
   preview(traffic: TrafficConfig, points: number = 100): number[] {
     const duration = this.getPreviewDuration(traffic);
+    // For series-based patterns, use the actual number of datapoints
+    // so the preview matches the imported resolution instead of downsampling to 100
+    if (traffic.pattern === 'grafana' || traffic.pattern === 'custom') {
+      const series = (traffic.params as CustomParams | GrafanaParams).series;
+      if (series && series.length > points) {
+        points = series.length;
+      }
+    }
     const tickInterval = duration / points;
     return this.generate(traffic, duration, tickInterval);
   }
