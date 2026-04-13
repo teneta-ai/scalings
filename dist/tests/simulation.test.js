@@ -231,6 +231,24 @@ describe('SimulationService — startup time', () => {
         const earlySnapshot = result.snapshots[2]; // tick 2
         assert.ok(earlySnapshot.starting_pods > 0 || earlySnapshot.running_pods === 1);
     });
+    it('defers scale-up while pods are still starting', async () => {
+        const config = makeConfig({
+            simulation: { duration: 30, tick_interval: 1 },
+            service: { ...SVC, min_replicas: 1, max_replicas: 50, capacity_per_replica: 100, startup_time: 10, scale_up_step: 4, metric_observation_delay: 0, cooldown_scale_up: 0, cooldown_scale_down: 9999, node_provisioning_time: 0 },
+            producer: { ...DEFAULT_PRODUCER, traffic: { pattern: 'steady', params: { rps: 5000 } } },
+        });
+        const result = await svc.run(config);
+        // With startup_time: 10, the first batch of 4 pods starts at tick 0 and
+        // becomes ready at tick 10. A second batch can only be scheduled at tick 10.
+        // Without the deferral fix, the autoscaler would fire every tick and hit
+        // max_replicas (50) within seconds. With the fix, scaling is gated by
+        // startup_time, so peak pods should be much lower than max.
+        assert.ok(result.summary.peak_pod_count < 20, `peak pods (${result.summary.peak_pod_count}) should be well below max_replicas (50) — scale-up deferred while pods start`);
+        // Verify deferral is logged
+        const allLogs = result.snapshots.flatMap(s => s.log_entries);
+        const deferLogs = allLogs.filter(l => l.includes('Scale-up deferred'));
+        assert.ok(deferLogs.length > 0, 'should log scale-up deferral while pods are starting');
+    });
 });
 // ---------------------------------------------------------------------------
 // Cost estimation

@@ -160,10 +160,14 @@ export class LocalSimulationService {
             const allPodsCount = pods.length;
             let scaleEvent = null;
             // Scale up check
+            // Skip scale-up while pods are still starting — real autoscalers (K8s HPA,
+            // AWS ASG, GCP MIG) include pending pods in the desired count, so they
+            // won't keep adding more pods when a batch is already booting up.
             const scaleUpThresholdFraction = service.scale_up_threshold / 100;
             if (delayedUtilization > scaleUpThresholdFraction
                 && (time - lastScaleUpTime) >= service.cooldown_scale_up
-                && allPodsCount < service.max_replicas) {
+                && allPodsCount < service.max_replicas
+                && startingPods.length === 0) {
                 const podsToAdd = Math.min(service.scale_up_step, service.max_replicas - allPodsCount);
                 let needsNewNode = false;
                 for (let i = 0; i < podsToAdd; i++) {
@@ -194,6 +198,11 @@ export class LocalSimulationService {
             }
             else if (delayedUtilization > scaleUpThresholdFraction && allPodsCount >= service.max_replicas) {
                 logEntries.push(`At max replicas (${service.max_replicas}), cannot scale up despite ${(delayedUtilization * 100).toFixed(0)}% utilization`);
+            }
+            else if (delayedUtilization > scaleUpThresholdFraction
+                && startingPods.length > 0
+                && allPodsCount < service.max_replicas) {
+                logEntries.push(`Scale-up deferred: ${startingPods.length} pod${startingPods.length > 1 ? 's' : ''} still starting`);
             }
             else if (delayedUtilization > scaleUpThresholdFraction
                 && (time - lastScaleUpTime) < service.cooldown_scale_up) {
