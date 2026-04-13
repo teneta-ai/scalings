@@ -825,7 +825,10 @@ export class UIControls {
   updatePreview(): void {
     try {
       const traffic = this.getTrafficConfig();
-      const data = this.trafficService.preview(traffic, 100);
+      const duration = this.getNumericValue('sim-duration', DEFAULT_CONFIG.simulation.duration);
+      const tick = this.getNumericValue('sim-tick', DEFAULT_CONFIG.simulation.tick_interval);
+      const points = Math.ceil(duration / tick);
+      const data = this.trafficService.preview(traffic, points);
       this.previewRenderer.render('traffic-preview-canvas', data);
     } catch {
       // Preview failed, non-critical
