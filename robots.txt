@@ -5,3 +5,5 @@ Sitemap: https://scalings.xyz/sitemap.xml
 
 # AI agent documentation
 # See /llms.txt for machine-readable site description
+# See /llms-full.txt for comprehensive parameter reference
+# See /docs.md for full documentation
