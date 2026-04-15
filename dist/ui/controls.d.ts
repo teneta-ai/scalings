@@ -28,6 +28,8 @@ export declare class UIControls {
     private getCustomSeries;
     private getGrafanaParams;
     private bindSliders;
+    private showValidationHint;
+    private addRangeHints;
     private bindPatternSelector;
     private bindAdvancedToggle;
     private bindPresets;

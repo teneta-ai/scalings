@@ -380,6 +380,7 @@ legend {
   gap: 0.5rem;
   margin-bottom: 0.5rem;
   min-height: 32px;
+  position: relative;
 }
 
 .param-row label {
@@ -395,11 +396,33 @@ legend {
   flex-shrink: 0;
 }
 
+.param-row input[type="number"].input-clamped {
+  border-color: var(--amber);
+  box-shadow: 0 0 4px var(--amber-dim);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
 .param-row .unit {
   min-width: 28px;
   font-size: 0.8rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
+}
+
+.param-row .validation-hint {
+  font-size: 0.7rem;
+  color: var(--amber);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  position: absolute;
+  bottom: -14px;
+  left: 0;
+}
+
+.param-row .validation-hint.visible {
+  opacity: 1;
 }
 
 /* --- Slider Styling --- */

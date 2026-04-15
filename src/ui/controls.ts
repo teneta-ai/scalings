@@ -54,6 +54,7 @@ export class UIControls {
     this.bindBrokerToggle();
     this.bindRetryDelayTooltip();
     this.bindCsvImport();
+    this.addRangeHints();
     this.showPatternParams(this.currentPattern);
     this.updatePreview();
   }
@@ -395,8 +396,11 @@ export class UIControls {
         const max = parseFloat(el.max);
         let val = parseFloat(el.value);
         if (!isNaN(min) && !isNaN(max) && !isNaN(val)) {
-          val = Math.max(min, Math.min(max, val));
-          el.value = val.toString();
+          const clamped = Math.max(min, Math.min(max, val));
+          if (clamped !== val) {
+            this.showValidationHint(el, val, min, max);
+            el.value = clamped.toString();
+          }
         }
         this.notifyChange();
         this.updatePreview();
@@ -419,6 +423,44 @@ export class UIControls {
           this.notifyChange();
           this.updatePreview();
         });
+      }
+    });
+  }
+
+  private showValidationHint(el: HTMLInputElement, attempted: number, min: number, max: number): void {
+    const row = el.closest('.param-row');
+    if (!row) return;
+
+    // Remove any existing hint in this row
+    const existing = row.querySelector('.validation-hint');
+    if (existing) existing.remove();
+
+    const direction = attempted < min ? 'min' : 'max';
+    const limit = direction === 'min' ? min : max;
+    const hint = document.createElement('span');
+    hint.className = 'validation-hint';
+    hint.textContent = `Clamped to ${direction} (${limit})`;
+    row.appendChild(hint);
+
+    el.classList.add('input-clamped');
+    requestAnimationFrame(() => hint.classList.add('visible'));
+
+    setTimeout(() => {
+      hint.classList.remove('visible');
+      el.classList.remove('input-clamped');
+      setTimeout(() => hint.remove(), 200);
+    }, 2000);
+  }
+
+  private addRangeHints(): void {
+    const numberInputs = document.querySelectorAll('.param-row input[type="number"]');
+    numberInputs.forEach(input => {
+      const el = input as HTMLInputElement;
+      const min = el.min;
+      const max = el.max;
+      if (min && max) {
+        const existing = el.title ? el.title + ' ' : '';
+        el.title = `${existing}(${min}–${max})`;
       }
     });
   }
