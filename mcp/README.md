@@ -84,9 +84,26 @@ The MCP code imports directly from `../src/services/` and `../src/interfaces/`
 
 Deployed on Vercel, same project as the site. `api/mcp.ts` is the serverless
 entry point; it wraps `mcp/server.ts` with `mcp-handler`'s `createMcpHandler`.
-The `mcp.scalings.xyz` subdomain is host-rewritten to `/api/mcp` via
-`vercel.json`. `maxDuration: 30s` is a safety cap — simulations run in
-milliseconds locally.
+The `vercel.json` rewrites are host-agnostic, so the endpoint is reachable at
+both `https://mcp.scalings.xyz/mcp` (branded URL) and
+`https://scalings.xyz/mcp` (stable fallback that keeps working even if the
+subdomain is detached, its production deployment is missing, or DNS for the
+subdomain breaks). Both paths hit the same function. `maxDuration: 30s` is a
+safety cap — simulations run in milliseconds locally.
+
+### Troubleshooting `DEPLOYMENT_NOT_FOUND` on `mcp.scalings.xyz`
+
+This Vercel error means the subdomain isn't attached to a project with a live
+production deployment. It's a dashboard-side issue, not a code issue. Check,
+in order:
+
+1. The Vercel project still exists and has a green Production deployment.
+2. `mcp.scalings.xyz` is listed under exactly one project's Settings → Domains.
+3. Git is still connected and the root directory is correct.
+4. DNS for the subdomain still resolves to a Vercel CNAME (`dig mcp.scalings.xyz +short`).
+
+Until the subdomain is repaired, clients can point at `https://scalings.xyz/mcp`
+— identical function, identical behavior.
 
 ## Structure
 

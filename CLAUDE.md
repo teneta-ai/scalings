@@ -6,7 +6,7 @@ Autoscaling simulator (Kubernetes HPA, AWS ASG, GCP MIG). Pure TypeScript, no fr
 
 **Two surfaces, one engine**:
 - **Browser UI** at `scalings.xyz` — runs 100% client-side. No backend, no API calls, no telemetry. Configs share via URL hash.
-- **MCP server** at `mcp.scalings.xyz/mcp` — for AI tools (Claude Desktop, Cursor, Claude Code, etc.). Streamable HTTP, stateless, no auth. Tool calls execute on a Vercel serverless function (`api/mcp.ts`) — the only server-side execution path.
+- **MCP server** at `mcp.scalings.xyz/mcp` (or `scalings.xyz/mcp` as a fallback) — for AI tools (Claude Desktop, Cursor, Claude Code, etc.). Streamable HTTP, stateless, no auth. Tool calls execute on a Vercel serverless function (`api/mcp.ts`) — the only server-side execution path. The host-agnostic rewrite in `vercel.json` serves `/mcp` on any attached domain, so the endpoint keeps working even if the subdomain is detached or its production deployment is missing.
 
 Both surfaces import `LocalSimulationService` from `src/services/`; the engine has zero DOM dependencies, so it works identically in either context.
 
@@ -88,7 +88,7 @@ api/
 
 **Dependency direction**: `ui/ → factory → services/ → interfaces/`. Never import UI from services.
 
-**MCP server**: `api/mcp.ts → mcp/server.ts → mcp/tools/* → src/services/* → src/interfaces/types.ts`. The MCP layer never duplicates simulation logic — it imports `LocalSimulationService`, `LocalTrafficPatternService`, and `LocalConfigService` directly. Deployed on Vercel at `mcp.scalings.xyz` via a host-scoped rewrite in `vercel.json`.
+**MCP server**: `api/mcp.ts → mcp/server.ts → mcp/tools/* → src/services/* → src/interfaces/types.ts`. The MCP layer never duplicates simulation logic — it imports `LocalSimulationService`, `LocalTrafficPatternService`, and `LocalConfigService` directly. Deployed on Vercel as a serverless function reachable at `/mcp` on any attached domain (`mcp.scalings.xyz/mcp` and `scalings.xyz/mcp` both resolve to the same function via `vercel.json` rewrites).
 
 **Service interfaces** are defined in `types.ts`. Implementations are in `services/`. The factory wires them — swap an implementation there, nothing else changes.
 
