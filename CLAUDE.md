@@ -2,9 +2,15 @@
 
 ## Project Overview
 
-Browser-based autoscaling simulator (Kubernetes HPA, AWS ASG, GCP MIG). Pure TypeScript, no frameworks, runs 100% in the browser. All services are composable and testable via dependency injection.
+Autoscaling simulator (Kubernetes HPA, AWS ASG, GCP MIG). Pure TypeScript, no frameworks, no UI dependencies in the simulation engine. All services are composable and testable via dependency injection.
 
-**This app is designed to be usable by LLMs.** The simulation engine has no DOM dependencies — an LLM with code execution can run simulations directly via the service layer without a browser. The web UI should also be semantically clear so LLMs that *can* see/interact with the page can understand it.
+**Two surfaces, one engine**:
+- **Browser UI** at `scalings.xyz` — runs 100% client-side. No backend, no API calls, no telemetry. Configs share via URL hash.
+- **MCP server** at `mcp.scalings.xyz/mcp` — for AI tools (Claude Desktop, Cursor, Claude Code, etc.). Streamable HTTP, stateless, no auth. Tool calls execute on a Vercel serverless function (`api/mcp.ts`) — the only server-side execution path.
+
+Both surfaces import `LocalSimulationService` from `src/services/`; the engine has zero DOM dependencies, so it works identically in either context.
+
+**This app is designed to be usable by LLMs.** An LLM with code execution can run simulations via the service layer; an LLM with MCP tooling can call `mcp.scalings.xyz`; an LLM that can see/interact with the page can use the UI directly.
 
 ### How an LLM can run a simulation (no browser needed)
 
@@ -69,9 +75,20 @@ src/
   services/              # Business logic (simulation, config, traffic, export)
   ui/                    # DOM controllers (controls, chart, main)
   factory.ts             # DI container — wires implementations to interfaces
+mcp/
+  server.ts              # MCP server setup — registers 5 tools on an McpServer
+  validation.ts          # mergeWithDefaults + validateSimulationConfig
+  parameter-docs.ts      # Structured parameter metadata for describe_parameters
+  tools/                 # One file per tool — imports LocalSimulationService etc.
+  tests/                 # node:test suite for tool handlers + validation + integration
+  tsconfig.json          # Separate build → dist-mcp/ (site build stays in dist/)
+api/
+  mcp.ts                 # Vercel serverless entry — wraps mcp/server.ts with mcp-handler
 ```
 
 **Dependency direction**: `ui/ → factory → services/ → interfaces/`. Never import UI from services.
+
+**MCP server**: `api/mcp.ts → mcp/server.ts → mcp/tools/* → src/services/* → src/interfaces/types.ts`. The MCP layer never duplicates simulation logic — it imports `LocalSimulationService`, `LocalTrafficPatternService`, and `LocalConfigService` directly. Deployed on Vercel at `mcp.scalings.xyz` via a host-scoped rewrite in `vercel.json`.
 
 **Service interfaces** are defined in `types.ts`. Implementations are in `services/`. The factory wires them — swap an implementation there, nothing else changes.
 

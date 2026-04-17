@@ -1,18 +1,32 @@
 # scalings.xyz
 
-> scalings.xyz is an interactive, fully client-side autoscaling simulator. Engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy handles the load. AI agents can programmatically construct simulation URLs using the URL Hash API.
+> scalings.xyz is an interactive autoscaling simulator. Engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy handles the load. AI agents can either generate shareable URLs (the simulation then runs in the user's browser) or call the MCP server to run simulations programmatically (the simulation runs on a Vercel serverless function).
 
 Key facts:
-- Fully client-side — no backend, no API calls, no auth
+- Two surfaces, same simulation engine:
+  - **Browser UI** at `scalings.xyz` — runs 100% client-side. No backend, no telemetry, no auth. Configs share via URL hash and run locally in the user's browser.
+  - **MCP server** at `mcp.scalings.xyz/mcp` — for AI tools (Claude Desktop, Cursor, Claude Code, any MCP client). Streamable HTTP, stateless, no auth. **When you call an MCP tool, the simulation executes server-side** on a Vercel serverless function (same engine as the browser, just headless).
 - Supports Kubernetes HPA, AWS ASG, GCP MIG, and custom/generic autoscalers
-- URL Hash API: encode a JSON config as base64, link to `scalings.xyz/#config=<base64>&autorun=true` — simulation runs on page load
+- URL Hash API: encode a JSON config as base64, link to `scalings.xyz/#config=<base64>&autorun=true` — simulation runs on page load in the user's browser
 - Exports deployment manifests (K8s HPA YAML, AWS CloudFormation, GCP Terraform) and load test scripts (k6, Gatling, Locust, JMeter, Artillery)
 - Built-in presets: Black Friday Spike, Gradual Daily Ramp, Noisy Neighbor, Step Migration, Bottomless Queue, Death Spiral (OLTP), Death Spiral (Queued)
 
+## For AI agents — which surface to use?
+
+- **You have an MCP-capable client** (Claude Desktop, Cursor, Claude Code, etc.): use the MCP server below. You'll get structured `SimulationResult` objects back and can iterate without a browser.
+- **You're producing output for a human to look at**: generate a `scalings.xyz/#config=<base64>` URL via the URL Hash API or `get_simulation_url` MCP tool. The user opens it; the simulation runs in their browser.
+
 ## Docs
 
-- [Full documentation](https://scalings.xyz/docs.md): Complete parameter reference, config schema, traffic patterns, URL Hash API with worked examples, and export types
+- [Full documentation](https://scalings.xyz/docs.md): Complete parameter reference, config schema, traffic patterns, URL Hash API with worked examples, MCP tool reference, and export types
 - [Full LLM context](https://scalings.xyz/llms-full.txt): Single-file version with all documentation content inlined
+
+## MCP Server
+
+- Endpoint: `https://mcp.scalings.xyz/mcp`
+- Protocol: MCP (Streamable HTTP, stateless, no auth)
+- Tools: `run_simulation`, `compare_simulations`, `list_presets`, `get_simulation_url`, `describe_parameters`
+- Setup: see [docs.md#mcp-server](https://scalings.xyz/docs.md#mcp-server) for Claude Desktop / Cursor / Claude Code configuration
 
 ## Optional
 

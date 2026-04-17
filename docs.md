@@ -2,7 +2,9 @@
 
 ## What is scalings.xyz?
 
-scalings.xyz is an interactive, fully client-side autoscaling simulator. It lets engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy can handle the load. Once you've found a config that works, export deployment manifests for your platform and load test scripts to validate against real infrastructure.
+scalings.xyz is an interactive autoscaling simulator. It lets engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy can handle the load. Once you've found a config that works, export deployment manifests for your platform and load test scripts to validate against real infrastructure.
+
+**Architecture**: the browser UI runs 100% client-side — no backend, no API calls, no telemetry. The optional [MCP server](#mcp-server) at `mcp.scalings.xyz` is the only exception: when AI tools (Claude Desktop, Cursor, Claude Code) call simulation tools, those calls execute on a Vercel serverless function. Both surfaces use the same underlying engine; neither stores user data.
 
 ## When to use it
 
@@ -203,6 +205,108 @@ scalings.xyz/#config=<base64-encoded-json>
 The `config` parameter is a base64-encoded JSON object matching the `SimulationConfig` schema. Add `&autorun=true` to auto-run the simulation on page load.
 
 AI agents and scripts can construct these URLs programmatically to link users directly to a pre-configured simulation.
+
+## MCP Server
+
+scalings.xyz exposes an MCP (Model Context Protocol) server so AI coding tools can run simulations programmatically — not just read docs. **Unlike the browser UI (which runs client-side in your tab), MCP tool calls execute on a Vercel serverless function** — same simulation engine, just headless. Stateless, no authentication, no user data stored.
+
+- **Endpoint**: `https://mcp.scalings.xyz/mcp`
+- **Transport**: Streamable HTTP (no SSE, no stdio in production)
+- **Auth**: none (public read-only — nothing to protect)
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `run_simulation` | Run a full autoscaling simulation. Accepts a partial `SimulationConfig` (missing fields inherit from defaults). Returns `{ run_id, snapshots, summary }` — per-tick snapshots plus aggregate metrics (total requests, drops, peak pods, cost, recovery time). |
+| `compare_simulations` | Run two configs side-by-side. Returns both `SimulationResult`s plus a `ComparisonSummary` of key metric deltas (b − a): `total_dropped`, `drop_rate_pp`, `peak_pods`, `peak_queue_depth`, `time_to_recover`, `estimated_total_cost`. Accepts optional human-readable labels. |
+| `list_presets` | List all built-in preset scenarios with their names, descriptions, and fully-merged `SimulationConfig`s (ready to pass to `run_simulation`). |
+| `get_simulation_url` | Generate a shareable `scalings.xyz/#config=<base64>` URL for a config. Pass `autorun: true` to append `&autorun=true` so the page runs the simulation on load. |
+| `describe_parameters` | Return structured parameter documentation: field name, type, default, description, unit, and valid range. Optional `section` filter narrows output to one of `simulation` / `service` / `producer` / `client` / `broker`. Use this to learn what knobs exist before constructing a config. |
+
+### Validation & limits
+
+All inputs are validated before the simulation runs. Errors are returned as clear, actionable text (e.g. `service.max_replicas (5000): Must be <= 1000.`).
+
+| Constraint | Limit |
+|------------|-------|
+| `simulation.duration` | (0, 3600] seconds (1 hour cap for serverless safety) |
+| `simulation.tick_interval` | [0.5, duration] seconds |
+| `service.max_replicas` | [1, 1000] |
+| `service.min_replicas` | ≤ `max_replicas` |
+| `service.scale_down_threshold` | < `scale_up_threshold` |
+| Numeric fields | Finite, non-NaN, non-negative where applicable |
+| Traffic `params` | Must match the shape of `pattern` (e.g. `spike` requires `base_rps`, `spike_rps`, `spike_start`, `spike_duration`) |
+| `failure_events[].time` | Within `[0, simulation.duration]` |
+
+### Connecting from MCP clients
+
+**Claude Desktop** — add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "scalings": {
+      "url": "https://mcp.scalings.xyz/mcp"
+    }
+  }
+}
+```
+
+**Cursor** — add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "scalings": {
+      "url": "https://mcp.scalings.xyz/mcp"
+    }
+  }
+}
+```
+
+**Claude Code** — register via CLI:
+
+```bash
+claude mcp add scalings --url https://mcp.scalings.xyz/mcp
+```
+
+**Generic MCP client** — any client that speaks Streamable HTTP can connect to `https://mcp.scalings.xyz/mcp`.
+
+### Example tool calls
+
+Run a simulation with a custom spike:
+
+```json
+{
+  "tool": "run_simulation",
+  "arguments": {
+    "config": {
+      "simulation": { "duration": 300, "tick_interval": 1 },
+      "service": { "min_replicas": 5, "max_replicas": 50, "scale_up_threshold": 70 },
+      "producer": {
+        "traffic": {
+          "pattern": "spike",
+          "params": { "base_rps": 200, "spike_rps": 2000, "spike_start": 60, "spike_duration": 30 }
+        }
+      }
+    }
+  }
+}
+```
+
+Compare a baseline vs. an aggressive scaling policy:
+
+```json
+{
+  "tool": "compare_simulations",
+  "arguments": {
+    "config_a": { "service": { "min_replicas": 2, "max_replicas": 10 } },
+    "config_b": { "service": { "min_replicas": 10, "max_replicas": 50, "scale_up_step": 10 } },
+    "labels": { "a": "baseline", "b": "aggressive" }
+  }
+}
+```
 
 ## Built-in Presets
 

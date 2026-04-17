@@ -51,6 +51,7 @@
   <header>
     <h1 class="logo">scalings<span class="logo-dot">.xyz</span></h1>
     <div class="header-actions">
+      <a href="#mcp" class="btn btn-small header-docs-btn" title="Use scalings.xyz from Claude Desktop, Cursor, Claude Code, or any MCP client">MCP</a>
       <a href="#docs" class="btn btn-small header-docs-btn">Docs</a>
       <div class="feedback-wrapper">
         <button class="btn btn-small header-feedback-btn" aria-label="Submit feedback" title="Feature request or bug report">Feedback</button>
@@ -705,7 +706,23 @@
       </button>
       <div id="docs-content" class="collapsible-content collapsed docs-content">
         <h3>What is scalings.xyz?</h3>
-        <p>scalings.xyz is an interactive, fully client-side autoscaling simulator. It lets engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy can handle the load. Once you've found a config that works, export deployment manifests for your platform and load test scripts to validate against real infrastructure.</p>
+        <p>scalings.xyz is an interactive autoscaling simulator. It lets engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy can handle the load. Once you've found a config that works, export deployment manifests for your platform and load test scripts to validate against real infrastructure.</p>
+        <p><strong>Architecture:</strong> the page you're looking at runs 100% in your browser &mdash; no backend, no API calls, no telemetry. Configs you build here never leave your tab. The optional <a href="#mcp">MCP server</a> at <code>mcp.scalings.xyz</code> is the one exception: when AI tools (Claude Desktop, Cursor, Claude Code) call simulation tools, those calls execute on a Vercel serverless function. Same engine, just headless. If you only use the website, nothing leaves your browser.</p>
+
+        <h3 id="mcp">Use scalings.xyz from your AI coding tool (MCP)</h3>
+        <p>scalings.xyz exposes a <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">Model Context Protocol</a> server so AI clients can run simulations programmatically. <strong>Note: unlike the browser UI, MCP tool calls execute server-side</strong> on a Vercel serverless function (stateless, no auth, no user data stored).</p>
+        <ul>
+          <li><strong>Endpoint:</strong> <code>https://mcp.scalings.xyz/mcp</code> (Streamable HTTP)</li>
+          <li><strong>Tools:</strong> <code>run_simulation</code>, <code>compare_simulations</code>, <code>list_presets</code>, <code>get_simulation_url</code>, <code>describe_parameters</code></li>
+        </ul>
+        <p><strong>Connect:</strong></p>
+        <ul>
+          <li><strong>Claude Code:</strong> <code>claude mcp add scalings --url https://mcp.scalings.xyz/mcp</code></li>
+          <li><strong>Claude Desktop</strong> (<code>claude_desktop_config.json</code>) or <strong>Cursor</strong> (<code>.cursor/mcp.json</code>):
+            <pre><code>{ "mcpServers": { "scalings": { "url": "https://mcp.scalings.xyz/mcp" } } }</code></pre>
+          </li>
+        </ul>
+        <p>Full tool reference: <a href="https://scalings.xyz/docs.md#mcp-server">docs.md</a> &middot; <a href="https://github.com/Agitolyev/scalings/tree/main/mcp" target="_blank" rel="noopener noreferrer">source on GitHub</a>.</p>
 
         <h3>When to use it</h3>
         <ul>
@@ -835,6 +852,10 @@ traffic:
       metric delivery? Maybe just overprovisioning is cheaper. Compare runs, see the numbers,
       and export production-ready manifests when you're done.
     </article>
+    <p class="footer-mcp">
+      Using an AI coding tool? Connect via <a href="#mcp">MCP</a> at <code>mcp.scalings.xyz/mcp</code>.
+      Browser sims run locally; MCP calls execute on a serverless function.
+    </p>
     <p class="copyright">&copy; 2025 scalings.xyz</p>
   </footer>
 

@@ -1,6 +1,23 @@
 {
   "buildCommand": "tsc",
   "outputDirectory": ".",
+  "functions": {
+    "api/mcp.ts": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/mcp",
+      "has": [{ "type": "host", "value": "mcp.scalings.xyz" }],
+      "destination": "/api/mcp"
+    },
+    {
+      "source": "/mcp/:path*",
+      "has": [{ "type": "host", "value": "mcp.scalings.xyz" }],
+      "destination": "/api/mcp"
+    }
+  ],
   "redirects": [
     {
       "source": "/:path*",

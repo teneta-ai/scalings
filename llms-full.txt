@@ -1,6 +1,8 @@
 # scalings.xyz
 
-> scalings.xyz is an interactive, fully client-side autoscaling simulator. Engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy handles the load. AI agents can programmatically construct simulation URLs using the URL Hash API.
+> scalings.xyz is an interactive autoscaling simulator. Engineers configure autoscaling parameters, select a traffic pattern, and run a discrete-time simulation to visualize whether their scaling policy handles the load.
+>
+> AI agents have two integration points: (1) the **URL Hash API**, which encodes a config in a `scalings.xyz/#config=<base64>` link — when a human opens it, the simulation runs entirely in their browser; (2) the **MCP server** at `mcp.scalings.xyz/mcp`, which lets MCP-capable clients (Claude Desktop, Cursor, Claude Code, etc.) actually run simulations programmatically — those calls execute on a Vercel serverless function. The browser UI itself never makes network calls; only the MCP path is server-side, and only when an MCP client invokes it.
 
 ## URL Hash API
 
@@ -372,3 +374,119 @@ Generates a ready-to-run load test script that reproduces your simulated traffic
 - **Artillery** (`.yml`) — Node.js YAML config with `arrivalRate` / `rampTo` phases.
 
 All generated scripts include the scalings.xyz share URL as a comment. Configure target URL, HTTP method, headers, request body, and average response time before generating. Template variables (`$randInt`, `$randString`, `$uuid`, `$timestamp`, `$randFloat`, `$randomEmail`) are translated to each framework's native random-data idioms.
+
+## MCP Server
+
+scalings.xyz exposes an MCP (Model Context Protocol) server so AI coding tools can run simulations programmatically rather than just reading documentation. The server runs on Vercel as a stateless serverless function at `https://mcp.scalings.xyz/mcp`, speaks the Streamable HTTP transport, and requires no authentication.
+
+### Tools
+
+#### `run_simulation`
+
+Run an autoscaling simulation with the given configuration. Returns the full result including every per-tick snapshot and an aggregate summary.
+
+- **Input**: `{ config: DeepPartial<SimulationConfig> }` — partial config; missing fields inherit from `DEFAULT_CONFIG`.
+- **Output**: `SimulationResult` — `{ run_id: string, snapshots: TickSnapshot[], summary: SimulationSummary }`.
+- **Limits**: `duration` <= 3600s, `tick_interval` >= 0.5s, `max_replicas` <= 1000. All numeric fields must be finite and non-negative where applicable.
+
+#### `compare_simulations`
+
+Run two simulations side-by-side and return both results plus a delta summary.
+
+- **Input**: `{ config_a: DeepPartial<SimulationConfig>, config_b: DeepPartial<SimulationConfig>, labels?: { a?: string, b?: string } }`.
+- **Output**: `{ a: SimulationResult, b: SimulationResult, comparison: ComparisonSummary }`.
+- **ComparisonSummary** fields (all `b - a` deltas): `labels`, `total_requests_delta`, `total_dropped_delta`, `drop_rate_delta_pp`, `peak_pods_delta`, `peak_queue_depth_delta`, `time_to_recover_delta_seconds` (null if either run did not recover), `estimated_total_cost_delta`.
+
+#### `list_presets`
+
+List every preset scenario with a fully-merged `SimulationConfig` ready to feed into `run_simulation`.
+
+- **Input**: none.
+- **Output**: `{ presets: Array<{ name: string, description: string, config: SimulationConfig }> }`.
+
+#### `get_simulation_url`
+
+Generate a shareable scalings.xyz URL that opens the simulator pre-loaded with the given config.
+
+- **Input**: `{ config: DeepPartial<SimulationConfig>, autorun?: boolean }`.
+- **Output**: `{ url: string }` — `https://scalings.xyz/#config=<base64>` with an optional `&autorun=true` suffix.
+
+#### `describe_parameters`
+
+Describe every parameter the simulator accepts: name, type, default, description, unit, and valid range.
+
+- **Input**: `{ section?: 'service' | 'producer' | 'client' | 'broker' | 'simulation' }` — optional filter.
+- **Output**: `{ sections: Record<string, ParameterDoc[]>, traffic_patterns?, enums? }`.
+- **ParameterDoc** fields: `name`, `path` (dotted), `type`, `default`, `description`, `unit?`, `min?`, `max?`, `enum_values?`.
+
+### Example Tool Call
+
+```json
+{
+  "tool": "run_simulation",
+  "arguments": {
+    "config": {
+      "simulation": { "duration": 300, "tick_interval": 1 },
+      "service": { "min_replicas": 5, "max_replicas": 50, "scale_up_threshold": 70 },
+      "producer": {
+        "traffic": {
+          "pattern": "spike",
+          "params": { "base_rps": 200, "spike_rps": 2000, "spike_start": 60, "spike_duration": 30 }
+        }
+      }
+    }
+  }
+}
+```
+
+Example response (abbreviated):
+
+```json
+{
+  "run_id": "run-1-a7c2f0",
+  "snapshots": [
+    { "time": 0, "traffic_rps": 200, "capacity_rps": 500, "running_pods": 5, "total_pods": 5, "served_requests": 200, "dropped_requests": 0, "queue_depth": 0, "utilization": 0.4, "scale_event": null, "log_entries": [] },
+    { "time": 1, "traffic_rps": 200, "capacity_rps": 500, "running_pods": 5, "total_pods": 5, "served_requests": 200, "dropped_requests": 0, "queue_depth": 0, "utilization": 0.4, "scale_event": null, "log_entries": [] }
+    // ...298 more snapshots...
+  ],
+  "summary": {
+    "total_requests": 78000,
+    "total_served": 76940,
+    "total_dropped": 1060,
+    "drop_rate_percent": 1.36,
+    "peak_pod_count": 36,
+    "min_pod_count": 5,
+    "peak_queue_depth": 0,
+    "avg_queue_wait_time_ms": 0,
+    "peak_queue_wait_time_ms": 0,
+    "total_expired": 0,
+    "total_retries": 0,
+    "time_under_provisioned_seconds": 12,
+    "time_under_provisioned_percent": 4.0,
+    "time_to_recover_seconds": 18,
+    "estimated_total_cost": 0.15
+  }
+}
+```
+
+### Client Setup
+
+**Claude Desktop** — `claude_desktop_config.json`:
+
+```json
+{ "mcpServers": { "scalings": { "url": "https://mcp.scalings.xyz/mcp" } } }
+```
+
+**Cursor** — `.cursor/mcp.json`:
+
+```json
+{ "mcpServers": { "scalings": { "url": "https://mcp.scalings.xyz/mcp" } } }
+```
+
+**Claude Code** — `claude mcp add scalings --url https://mcp.scalings.xyz/mcp`
+
+**Any MCP-compatible client** — point it at `https://mcp.scalings.xyz/mcp` over Streamable HTTP.
+
+### Error Handling
+
+Every tool validates its input before executing. On invalid input the tool returns an MCP error result whose text describes exactly which field failed and why, e.g. `service.max_replicas (5000): Must be <= 1000.` Callers should surface these messages to the user or correct the config and retry.

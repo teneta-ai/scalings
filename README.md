@@ -27,6 +27,13 @@ Supported platforms:
 - **Import/Export runs** — save multi-run comparison data as JSON for sharing or later analysis
 - **Export** — generate deployable manifests (Kubernetes HPA YAML, AWS CloudFormation, GCP Terraform, gcloud CLI)
 - **Shareable URLs** — encode your full config in the URL hash for easy sharing
+- **MCP server for AI tools** — Claude Desktop, Cursor, Claude Code, and any MCP client can run simulations programmatically against `https://mcp.scalings.xyz/mcp`. See [mcp/README.md](mcp/README.md).
+
+## Architecture
+
+The browser UI runs **100% client-side** — no backend, no API calls. Open the page, run simulations locally, share configs via URL hash.
+
+The optional **MCP server** at `mcp.scalings.xyz` is the one exception: when an AI tool calls a tool like `run_simulation`, the simulation executes on a Vercel serverless function (same engine as the browser, just headless). Both surfaces use the same `LocalSimulationService` from `src/services/`. If you only use the website, nothing leaves your browser.
 
 ## Built-in presets
 
@@ -75,7 +82,7 @@ src/
 ├── services/
 │   ├── config.ts           # Config serialization (YAML, URL hash, localStorage)
 │   ├── export.ts           # Export to deployment formats
-│   ├── simulation.ts       # Core simulation engine
+│   ├── simulation.ts       # Core simulation engine (used by both UI and MCP)
 │   └── traffic.ts          # Traffic pattern generation
 ├── tests/                  # Unit tests
 ├── ui/
@@ -83,6 +90,16 @@ src/
 │   ├── controls.ts         # Form controls and parameter UI
 │   └── chart.ts            # Chart.js visualization
 └── factory.ts              # Service factory / DI container
+
+mcp/                        # MCP server — imports src/services/ directly
+├── server.ts               # Registers the 5 tools on an McpServer
+├── tools/                  # Thin wrappers over LocalSimulationService etc.
+├── validation.ts
+├── parameter-docs.ts
+└── tests/
+
+api/
+└── mcp.ts                  # Vercel Serverless Function entry point
 ```
 
 ### Config structure
@@ -98,6 +115,8 @@ See [llms.txt](https://scalings.xyz/llms.txt) for full schema details.
 
 ## Programmatic usage
 
+### URL Hash API (client-side, runs in the user's browser)
+
 Construct a URL to load a pre-configured simulation:
 
 ```
@@ -105,6 +124,24 @@ https://scalings.xyz/#config=<base64-encoded-json>&autorun=true
 ```
 
 The config parameter is a base64-encoded JSON object matching the `SimulationConfig` schema. See [llms.txt](https://scalings.xyz/llms.txt) for full schema details.
+
+### MCP server (server-side, for AI coding tools)
+
+An MCP server at `https://mcp.scalings.xyz/mcp` exposes five tools so AI clients can run simulations, compare configs, list presets, generate share URLs, and introspect parameters — without a browser. Calls execute on a Vercel serverless function; no user data is stored (stateless, no auth).
+
+Connect:
+
+```bash
+# Claude Code
+claude mcp add scalings --url https://mcp.scalings.xyz/mcp
+```
+
+```jsonc
+// Claude Desktop (claude_desktop_config.json) or Cursor (.cursor/mcp.json)
+{ "mcpServers": { "scalings": { "url": "https://mcp.scalings.xyz/mcp" } } }
+```
+
+See [mcp/README.md](mcp/README.md) and [docs.md#mcp-server](https://scalings.xyz/docs.md#mcp-server) for the full tool reference.
 
 ## License
 
