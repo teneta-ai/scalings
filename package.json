@@ -5,14 +5,28 @@
   "description": "Autoscaling simulator for Kubernetes HPA, AWS ASG, and GCP MIG",
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test dist/tests/*.test.js",
+    "build:mcp": "tsc -p mcp/tsconfig.json",
+    "test:site": "tsc && node --test dist/tests/*.test.js",
+    "test:mcp": "tsc -p mcp/tsconfig.json && node --test dist-mcp/mcp/tests/*.test.js",
+    "test": "npm run test:site && npm run test:mcp",
     "check:docs": "node scripts/check-llm-docs.js"
   },
-  "keywords": ["autoscaling", "kubernetes", "hpa", "simulator", "capacity-planning"],
+  "keywords": [
+    "autoscaling",
+    "kubernetes",
+    "hpa",
+    "simulator",
+    "capacity-planning"
+  ],
   "homepage": "https://scalings.xyz/",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.5.2",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "mcp-handler": "^1.1.0",
+    "zod": "^3.25.76"
   }
 }

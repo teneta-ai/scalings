@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "../dist-mcp",
+    "lib": ["ES2020"],
+    "types": ["node"]
+  },
+  "include": [
+    "./**/*.ts",
+    "../api/**/*.ts",
+    "../src/interfaces/**/*.ts",
+    "../src/services/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "dist-mcp"]
+}
