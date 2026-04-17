@@ -133,7 +133,7 @@ Connect:
 
 ```bash
 # Claude Code
-claude mcp add scalings --url https://mcp.scalings.xyz/mcp
+claude mcp add --transport http scalings https://mcp.scalings.xyz/mcp
 ```
 
 ```jsonc

@@ -34,7 +34,7 @@ Streamable HTTP. Stateless, public, no auth.
 **Claude Code** —
 
 ```bash
-claude mcp add scalings --url https://mcp.scalings.xyz/mcp
+claude mcp add --transport http scalings https://mcp.scalings.xyz/mcp
 ```
 
 **Generic MCP client** — point it at `https://mcp.scalings.xyz/mcp` over

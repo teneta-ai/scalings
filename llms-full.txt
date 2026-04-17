@@ -483,7 +483,7 @@ Example response (abbreviated):
 { "mcpServers": { "scalings": { "url": "https://mcp.scalings.xyz/mcp" } } }
 ```
 
-**Claude Code** — `claude mcp add scalings --url https://mcp.scalings.xyz/mcp`
+**Claude Code** — `claude mcp add --transport http scalings https://mcp.scalings.xyz/mcp`
 
 **Any MCP-compatible client** — point it at `https://mcp.scalings.xyz/mcp` over Streamable HTTP.
 

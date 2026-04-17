@@ -268,7 +268,7 @@ All inputs are validated before the simulation runs. Errors are returned as clea
 **Claude Code** — register via CLI:
 
 ```bash
-claude mcp add scalings --url https://mcp.scalings.xyz/mcp
+claude mcp add --transport http scalings https://mcp.scalings.xyz/mcp
 ```
 
 **Generic MCP client** — any client that speaks Streamable HTTP can connect to `https://mcp.scalings.xyz/mcp`.
