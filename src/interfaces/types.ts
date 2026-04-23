@@ -294,6 +294,22 @@ export interface TrafficPatternService {
   preview(pattern: TrafficConfig, points?: number): number[];
 }
 
+/** Identity of the current user. All fields optional so anonymous or partially-known users are representable. */
+export interface UserContext {
+  id?: string;
+  email?: string;
+  team?: string;
+}
+
+/**
+ * Reads the current user identity. Enables future team- and permission-scoping
+ * without changing callers. The default implementation returns null (anonymous);
+ * swap for an auth-backed implementation in factory.ts when sign-in lands.
+ */
+export interface UserContextService {
+  getCurrentUser(): UserContext | null;
+}
+
 export interface LoadTestExportService {
   getExporter(framework: LoadTestFramework): LoadTestExporter;
   getAvailableFrameworks(): { id: LoadTestFramework; name: string }[];

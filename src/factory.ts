@@ -11,12 +11,14 @@ import {
   ExportService,
   TrafficPatternService,
   LoadTestExportService,
+  UserContextService,
 } from './interfaces/types.js';
 import { LocalSimulationService } from './services/simulation.js';
 import { LocalConfigService } from './services/config.js';
 import { LocalExportService } from './services/export.js';
 import { LocalTrafficPatternService } from './services/traffic.js';
 import { LocalLoadTestExportService } from './services/loadtest/index.js';
+import { LocalUserContextService } from './services/context.js';
 
 export interface ServiceContainer {
   simulation: SimulationService;
@@ -24,6 +26,7 @@ export interface ServiceContainer {
   export: ExportService;
   traffic: TrafficPatternService;
   loadTestExport: LoadTestExportService;
+  userContext: UserContextService;
 }
 
 export function createServices(): ServiceContainer {
@@ -32,6 +35,7 @@ export function createServices(): ServiceContainer {
   const config = new LocalConfigService();
   const exportService = new LocalExportService();
   const loadTestExport = new LocalLoadTestExportService();
+  const userContext = new LocalUserContextService();
 
   return {
     simulation,
@@ -39,5 +43,6 @@ export function createServices(): ServiceContainer {
     export: exportService,
     traffic,
     loadTestExport,
+    userContext,
   };
 }
